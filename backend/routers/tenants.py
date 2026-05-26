@@ -3,7 +3,7 @@ from models.schemas import TenantRegister, TenantLogin, Token
 from core.auth import db, get_password_hash, verify_password, create_access_token, get_current_tenant
 import uuid
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
 
@@ -22,7 +22,7 @@ async def register(tenant: TenantRegister):
         "domain": tenant.domain,
         "plan": tenant.plan,
         "password_hash": get_password_hash(tenant.password),
-        "created_at": datetime.utcnow()
+        "created_at": datetime.now(timezone.utc)
     })
     
     access_token = create_access_token(data={"sub": tenant_id})

@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 import httpx
 from core.auth import db
@@ -13,7 +13,7 @@ MAX_PAGES = 200
 async def crawl_task(tenant_id: str, seed_url: str, job_id: str):
     await db.crawl_jobs.update_one(
         {"job_id": job_id},
-        {"$set": {"status": "running", "started_at": datetime.utcnow()}}
+        {"$set": {"status": "running", "started_at": datetime.now(timezone.utc)}}
     )
 
     try:
@@ -71,7 +71,7 @@ async def crawl_task(tenant_id: str, seed_url: str, job_id: str):
                 "url": url,
                 "title": title,
                 "content": content,
-                "crawled_at": datetime.utcnow()
+                "crawled_at": datetime.now(timezone.utc)
             })
             pages_found += 1
 
@@ -101,7 +101,7 @@ async def crawl_task(tenant_id: str, seed_url: str, job_id: str):
                 "status": "done",
                 "pages_found": pages_found,
                 "chunks_created": chunks_created,
-                "finished_at": datetime.utcnow()
+                "finished_at": datetime.now(timezone.utc)
             }}
         )
 
@@ -112,6 +112,6 @@ async def crawl_task(tenant_id: str, seed_url: str, job_id: str):
             {"$set": {
                 "status": "failed",
                 "error": str(e),
-                "finished_at": datetime.utcnow()
+                "finished_at": datetime.now(timezone.utc)
             }}
         )
