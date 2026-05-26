@@ -46,12 +46,13 @@ sequenceDiagram
     loop For each page in domain
         Crawler->>DB: Store page content
         Crawler->>Crawler: Chunk text (512 tokens)
-        loop For each chunk
-            Crawler->>OpenAI: Create Embedding (text-embedding-3-small)
-            OpenAI-->>Crawler: Return 1536-dim vector
-            Crawler->>DB: Store chunk + vector + URL
+        loop For each chunk batch
+            Crawler->>OpenAI: Create batch embeddings (text-embedding-3-small)
+            OpenAI-->>Crawler: Return 1536-dim vectors
+            Crawler->>DB: Store chunks + vectors + URLs
         end
     end
+    Crawler->>DB: Remove older indexed versions for refreshed URLs
     Crawler->>DB: Mark Crawl Job as Done
 ```
 
