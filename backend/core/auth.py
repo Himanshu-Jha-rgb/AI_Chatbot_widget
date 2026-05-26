@@ -1,0 +1,70 @@
+import os
+from datetime import datetime, timedelta
+import bcrypt
+from jose import JWTError, jwt
+from fastapi import Depends, HTTPException, status, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from motor.motor_asyncio import AsyncIOMotorClient
+from core.config import settings
+
+security = HTTPBearer()
+
+ALGORITHM = "HS256"
+
+limiter = Limiter(key_func=get_remote_address)
+
+client = AsyncIOMotorClient(settings.MONGODB_URI)
+db = client.chatbot_db
+
+def verify_password(plain_password, hashed_password):
+    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+
+def get_password_hash(password):
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=60 * 24 * 7)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET, algorithm=ALGORITHM)
+    return encoded_jwt
+
+async def get_current_tenant(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[ALGORITHM])
+        tenant_id: str = payload.get("sub")
+        if tenant_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+        
+    tenant = await db.tenants.find_one({"tenant_id": tenant_id})
+    if tenant is None:
+        raise credentials_exception
+    return tenant
+
+async def verify_api_key(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)):
+    api_key = credentials.credentials
+    if not api_key.startswith("sk_live_"):
+        raise HTTPException(status_code=403, detail="Invalid API Key format")
+        
+    tenant = await db.tenants.find_one({"api_key": api_key})
+    if not tenant:
+        raise HTTPException(status_code=403, detail="Invalid API Key")
+        
+    origin = request.headers.get("origin")
+    if origin and tenant["domain"] not in origin and "localhost" not in origin:
+        pass # In production, strictly check origin
+        
+    return tenant

@@ -1,0 +1,51 @@
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom';
+import Login from './pages/Login';
+import Overview from './pages/Overview';
+import Crawl from './pages/Crawl';
+import Settings from './pages/Settings';
+
+const Layout = ({ children }) => {
+    const navigate = useNavigate();
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        navigate('/login');
+    };
+
+    return (
+        <div style={{ display: 'flex', minHeight: '100vh' }}>
+            <div style={{ width: '250px', background: '#111', color: '#fff', padding: '2rem' }}>
+                <h2 style={{ color: '#fff', marginTop: 0 }}>Dashboard</h2>
+                <nav style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '2rem' }}>
+                    <Link to="/" style={{ color: '#aaa', textDecoration: 'none' }}>Overview</Link>
+                    <Link to="/crawl" style={{ color: '#aaa', textDecoration: 'none' }}>Crawl Jobs</Link>
+                    <Link to="/settings" style={{ color: '#aaa', textDecoration: 'none' }}>Settings</Link>
+                    <button onClick={handleLogout} style={{ marginTop: 'auto', background: 'none', border: 'none', color: '#ff4444', textAlign: 'left', cursor: 'pointer', padding: 0 }}>Logout</button>
+                </nav>
+            </div>
+            <div style={{ flex: 1, padding: '2rem', overflowY: 'auto' }}>
+                {children}
+            </div>
+        </div>
+    );
+};
+
+const PrivateRoute = ({ children }) => {
+    const token = localStorage.getItem('token');
+    return token ? <Layout>{children}</Layout> : <Navigate to="/login" />;
+};
+
+const App = () => {
+    return (
+        <BrowserRouter>
+            <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/" element={<PrivateRoute><Overview /></PrivateRoute>} />
+                <Route path="/crawl" element={<PrivateRoute><Crawl /></PrivateRoute>} />
+                <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
+            </Routes>
+        </BrowserRouter>
+    );
+};
+
+export default App;

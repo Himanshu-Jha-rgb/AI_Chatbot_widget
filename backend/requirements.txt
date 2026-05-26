@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+motor
+pymongo
+pydantic
+pydantic-settings
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+httpx
+beautifulsoup4
+readability-lxml
+langchain-text-splitters
+openai
+tenacity
+slowapi

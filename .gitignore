@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+env/
+venv/
+*.egg-info/
+
+# Environments
+.env
+
+# Node / Frontend
+node_modules/
+dist/
+build/
+.npm/
+
+# OS / Editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
