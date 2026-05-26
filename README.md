@@ -14,25 +14,37 @@ graph TD
     Widget <-->|API Key Auth| API
     
     API <-->|Stores Tenants, Jobs, Chunks| MongoDB[("MongoDB Atlas")]
+    API <-->|Crawls websites| Firecrawl["Firecrawl API"]
     API <-->|Generates Embeddings & Chat| OpenAI["OpenAI API"]
 ```
 
-### 2. Crawling & Indexing Flow
+### 2. Firecrawl Crawling & Indexing Flow
+Firecrawl handles site crawling and markdown extraction. The backend handles chunking, embedding, and storing the indexed content in MongoDB.
+
 ```mermaid
 sequenceDiagram
     participant Dashboard
     participant API as FastAPI Backend
     participant Crawler as Background Task (Crawler)
+    participant Firecrawl
     participant OpenAI
     participant DB as MongoDB Vector Search
     
-    Dashboard->>API: POST /crawl (Seed URL)
+    Dashboard->>API: POST /dashboard/crawl (Seed URL)
     API->>DB: Create Crawl Job Status
     API-->>Dashboard: Return Job ID
     API-)Crawler: Trigger Async Crawl Task
+    Crawler->>DB: Mark Crawl Job as Running
+    Crawler->>Firecrawl: Start crawl job
+    Firecrawl-->>Crawler: Return Firecrawl Job ID
+    
+    loop Until crawl completes
+        Crawler->>Firecrawl: Poll crawl status
+        Firecrawl-->>Crawler: Status and crawled pages
+    end
     
     loop For each page in domain
-        Crawler->>Crawler: Scrape HTML & Extract Text
+        Crawler->>DB: Store page content
         Crawler->>Crawler: Chunk text (512 tokens)
         loop For each chunk
             Crawler->>OpenAI: Create Embedding (text-embedding-3-small)
@@ -57,6 +69,7 @@ sequenceDiagram
     
     API->>DB: $vectorSearch (Query Vector, tenant_id)
     DB-->>API: Top 5 Relevant Chunks
+    API->>DB: Load conversation history
     
     API->>OpenAI: ChatCompletion with Context (GPT-4o)
     OpenAI-->>API: Final Answer
@@ -72,15 +85,25 @@ sequenceDiagram
 - Firecrawl API Key
 
 ## 1. Setup Environment
-Create a `.env` file in the root directory (or export them):
+Use `backend/.env.example` as the template:
+
 ```bash
-MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>.mongodb.net/?retryWrites=true&w=majority
-OPENAI_API_KEY=sk-your-openai-api-key
-FIRECRAWL_API_KEY=fc-your-firecrawl-api-key
+cp backend/.env.example .env
+```
+
+For Docker Compose, keep the copied `.env` in the project root. For manual backend development, you can also copy it to `backend/.env` because the backend loads `.env` from its working directory.
+
+Update the values:
+```bash
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/?retryWrites=true&w=majority
+OPENAI_API_KEY=sk-proj-your-openai-api-key-here
+FIRECRAWL_API_KEY=fc-your-firecrawl-api-key-here
 JWT_SECRET=your-super-secret-jwt-key
-ALLOWED_ORIGINS=*
+ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 VITE_API_BASE_URL=http://localhost:8000
 ```
+
+`VITE_API_BASE_URL` is used when building the dashboard so browser requests and generated widget snippets point to the backend.
 
 ## 2. MongoDB Atlas Vector Search Setup
 1. Open MongoDB Atlas and navigate to your cluster.
@@ -138,6 +161,7 @@ npm run build
 **Terminal 2: Start the Backend**
 ```bash
 cd backend
+cp .env.example .env
 python3 -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
