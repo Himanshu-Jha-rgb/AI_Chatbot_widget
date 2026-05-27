@@ -30,6 +30,8 @@ class ChatRequest(BaseModel):
 class Source(BaseModel):
     url: str
     title: str
+    section_title: Optional[str] = None
+    section_path: Optional[str] = None
 
 class ChatResponse(BaseModel):
     answer: str

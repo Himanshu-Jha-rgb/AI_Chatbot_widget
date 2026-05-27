@@ -4,7 +4,7 @@ from routers import tenants, crawl, chat
 from core.config import settings
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from core.auth import limiter
+from core.auth import db, limiter
 from fastapi.staticfiles import StaticFiles
 import os
 
@@ -32,3 +32,9 @@ app.mount("/static", StaticFiles(directory="../widget/dist"), name="static")
 @app.get("/")
 def root():
     return {"message": "API is running. Widget at /static/widget.js"}
+
+@app.on_event("startup")
+async def ensure_lookup_indexes():
+    await db.parents.create_index([("tenant_id", 1), ("parent_id", 1)])
+    await db.chunks.create_index([("tenant_id", 1), ("parent_id", 1), ("child_index", 1)])
+    await db.pages.create_index([("tenant_id", 1), ("url", 1)])

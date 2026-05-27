@@ -32,6 +32,7 @@ async def get_crawl_status(job_id: str, current_tenant: dict = Depends(verify_ap
 async def delete_index(current_tenant: dict = Depends(verify_api_key)):
     tenant_id = current_tenant["tenant_id"]
     await db.chunks.delete_many({"tenant_id": tenant_id})
+    await db.parents.delete_many({"tenant_id": tenant_id})
     await db.pages.delete_many({"tenant_id": tenant_id})
     return {"status": "deleted"}
     
@@ -60,5 +61,6 @@ async def dashboard_get_crawl_status(job_id: str, current_tenant: dict = Depends
 async def dashboard_delete_index(current_tenant: dict = Depends(get_current_tenant)):
     tenant_id = current_tenant["tenant_id"]
     await db.chunks.delete_many({"tenant_id": tenant_id})
+    await db.parents.delete_many({"tenant_id": tenant_id})
     await db.pages.delete_many({"tenant_id": tenant_id})
     return {"status": "deleted"}

@@ -14,3 +14,4 @@ langchain-text-splitters
 openai
 tenacity
 slowapi
+tiktoken

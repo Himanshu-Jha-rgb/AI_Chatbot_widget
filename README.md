@@ -19,7 +19,7 @@ graph TD
 ```
 
 ### 2. Firecrawl Crawling & Indexing Flow
-Firecrawl handles site crawling and markdown extraction. The backend handles chunking, embedding, and storing the indexed content in MongoDB.
+Firecrawl handles site crawling and markdown extraction. The backend splits each page into parent sections by markdown headings, embeds token-based child chunks from those sections, and stores the indexed content in MongoDB.
 
 ```mermaid
 sequenceDiagram
@@ -45,11 +45,11 @@ sequenceDiagram
     
     loop For each page in domain
         Crawler->>DB: Store page content
-        Crawler->>Crawler: Chunk text (512 tokens)
+        Crawler->>Crawler: Split markdown into parent sections by headings/title
         loop For each chunk batch
-            Crawler->>OpenAI: Create batch embeddings (text-embedding-3-small)
+            Crawler->>OpenAI: Create token-based child chunk embeddings (text-embedding-3-small)
             OpenAI-->>Crawler: Return 1536-dim vectors
-            Crawler->>DB: Store chunks + vectors + URLs
+            Crawler->>DB: Store parent sections + child chunks + vectors + URLs
         end
     end
     Crawler->>DB: Remove older indexed versions for refreshed URLs
@@ -69,7 +69,7 @@ sequenceDiagram
     OpenAI-->>API: Query Vector
     
     API->>DB: $vectorSearch (Query Vector, tenant_id)
-    DB-->>API: Top 5 Relevant Chunks
+    DB-->>API: Top relevant child chunks with capped parent/window context
     API->>DB: Load conversation history
     
     API->>OpenAI: ChatCompletion with Context (GPT-4o)
@@ -134,6 +134,11 @@ VITE_API_BASE_URL=http://localhost:8000
 }
 ```
 7. Click "Next" and "Create Search Index".
+
+The backend also creates regular MongoDB lookup indexes on startup for parent-child retrieval:
+- `parents`: `tenant_id`, `parent_id`
+- `chunks`: `tenant_id`, `parent_id`, `child_index`
+- `pages`: `tenant_id`, `url`
 
 ## 3. Run the Platform
 

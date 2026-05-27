@@ -92,9 +92,15 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
                                 </div>
                                 {m.sources && m.sources.length > 0 && (
                                     <div style={{ fontSize: '12px', marginTop: '4px', color: '#666' }}>
-                                        Sources: {m.sources.map((s, idx) => (
-                                            <a key={idx} href={s.url} style={{ color: '#0070f3', marginRight: '8px' }}>[{idx + 1}]</a>
-                                        ))}
+                                        Sources: {m.sources.map((s, idx) => {
+                                            const label = s.section_title || s.title || `Source ${idx + 1}`;
+                                            const fullTitle = s.section_path || label;
+                                            return (
+                                                <a key={idx} href={s.url} title={fullTitle} style={{ color: '#0070f3', marginRight: '8px' }}>
+                                                    [{idx + 1}] {label}
+                                                </a>
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>
