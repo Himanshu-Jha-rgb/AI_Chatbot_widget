@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiUrl } from '../api';
+import { apiUrl, handleUnauthorized } from '../api';
 
 const Crawl = () => {
     const [seedUrl, setSeedUrl] = useState('');
@@ -17,6 +17,7 @@ const Crawl = () => {
             },
             body: JSON.stringify({ seed_url: seedUrl })
         });
+        if (handleUnauthorized(res)) return;
         if (res.ok) {
             const data = await res.json();
             setJobId(data.job_id);
@@ -32,6 +33,10 @@ const Crawl = () => {
                 const res = await fetch(apiUrl(`/dashboard/crawl/${jobId}`), {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+                if (handleUnauthorized(res)) {
+                    clearInterval(interval);
+                    return;
+                }
                 if (res.ok) {
                     const data = await res.json();
                     setJobStatus(data);

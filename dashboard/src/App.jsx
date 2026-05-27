@@ -4,11 +4,12 @@ import Login from './pages/Login';
 import Overview from './pages/Overview';
 import Crawl from './pages/Crawl';
 import Settings from './pages/Settings';
+import { clearSession } from './api';
 
 const Layout = ({ children }) => {
     const navigate = useNavigate();
     const handleLogout = () => {
-        localStorage.removeItem('token');
+        clearSession();
         navigate('/login');
     };
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { API_BASE_URL, apiUrl } from '../api';
+import { API_BASE_URL, apiUrl, handleUnauthorized } from '../api';
 
 const Settings = () => {
     const [me, setMe] = useState(null);
@@ -13,6 +13,7 @@ const Settings = () => {
         const res = await fetch(apiUrl('/tenants/me'), {
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (handleUnauthorized(res)) return;
         if (res.ok) {
             setMe(await res.json());
         }
@@ -26,6 +27,7 @@ const Settings = () => {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (handleUnauthorized(res)) return;
         if (res.ok) {
             const data = await res.json();
             setMe({ ...me, api_key: data.api_key });

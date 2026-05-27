@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { apiUrl } from '../api';
+import { apiUrl, handleUnauthorized } from '../api';
 
 const Overview = () => {
     const [stats, setStats] = useState(null);
@@ -10,6 +10,7 @@ const Overview = () => {
             const res = await fetch(apiUrl('/tenants/stats'), {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (handleUnauthorized(res)) return;
             if (res.ok) {
                 const data = await res.json();
                 setStats(data);
