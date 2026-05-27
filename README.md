@@ -15,68 +15,122 @@ graph TD
     
     API <-->|Stores Tenants, Jobs, Chunks| MongoDB[("MongoDB Atlas")]
     API <-->|Crawls websites| Firecrawl["Firecrawl API"]
-    API <-->|Generates Embeddings & Chat| OpenAI["OpenAI API"]
+    API <-->|Embeddings / Chat / Query Rewriting| OpenAI["OpenAI API"]
 ```
 
-### 2. Firecrawl Crawling & Indexing Flow
-Firecrawl handles site crawling and markdown extraction. The backend splits each page into parent sections by markdown headings, skips heading-only sections, embeds token-based child chunks from useful sections, and stores the indexed content in MongoDB.
-
+### 2. Chat Flow
 ```mermaid
 sequenceDiagram
-    participant Dashboard
+    participant User as Website Visitor
+    participant Widget as Chat Widget
     participant API as FastAPI Backend
-    participant Crawler as Background Task (Crawler)
-    participant Firecrawl
-    participant OpenAI
-    participant DB as MongoDB Vector Search
+    participant Rewriter as gpt-4o-mini<br/>(Query Rewriter)
+    participant Vector as Vector Search
+    participant BM25 as BM25 Full-Text
+    participant GPT as gpt-4o
+
+    User->>Widget: Types a question
+    Widget->>API: POST /chat { query, session_id, api_key }
     
-    Dashboard->>API: POST /dashboard/crawl (Seed URL)
-    API->>DB: Create Crawl Job Status
-    API-->>Dashboard: Return Job ID
-    API-)Crawler: Trigger Async Crawl Task
-    Crawler->>DB: Mark Crawl Job as Running
-    Crawler->>Firecrawl: Start crawl job
-    Firecrawl-->>Crawler: Return Firecrawl Job ID
+    API->>Rewriter: Rewrite & classify query
+    Note over Rewriter: Returns (search_query, needs_search)
     
-    loop Until crawl completes
-        Crawler->>Firecrawl: Poll crawl status
-        Firecrawl-->>Crawler: Status and crawled pages
-    end
+    alt Is greeting / small talk
+        Rewriter-->>API: ("hi", needs_search=False)
+        API->>GPT: Conversational prompt (no context)
+        GPT-->>API: "Hello! How can I help?"
     
-    loop For each page in domain
-        Crawler->>DB: Store page content
-        Crawler->>Crawler: Split markdown into parent sections by headings/title
-        loop For each chunk batch
-            Crawler->>OpenAI: Create token-based child chunk embeddings (text-embedding-3-small)
-            OpenAI-->>Crawler: Return 1536-dim vectors
-            Crawler->>DB: Store parent sections + child chunks + vectors + URLs
+    else Is searchable query
+        Rewriter-->>API: ("schoollog attendance features", needs_search=True)
+        
+        par Vector Search (semantic)
+            API->>Vector: Embed query + $vectorSearch
+            Vector-->>API: Top 3 unique parents
+        and BM25 Search (keyword)
+            API->>BM25: $search on text + section_title
+            BM25-->>API: Top 2 unique parents
+        end
+        
+        API->>API: Merge & dedup (3 vector + 2 BM25)
+        API->>API: Expand child chunks to parent sections
+        
+        alt Relevant content found
+            API->>GPT: RAG prompt with context
+            GPT-->>API: Answer with citations
+        else No relevant content
+            API-->>Widget: "I don't have information about that"
         end
     end
-    Crawler->>DB: Remove older indexed versions for refreshed URLs
-    Crawler->>DB: Mark Crawl Job as Done
+    
+    API->>MongoDB: Save to conversation history
+    API-->>Widget: { answer, sources }
+    Widget-->>User: Display answer
 ```
 
-### 3. Chat Request Flow
+### 3. Crawling & Indexing Flow
 ```mermaid
 sequenceDiagram
-    participant Widget
+    participant Dashboard as React Dashboard
     participant API as FastAPI Backend
-    participant DB as MongoDB Vector Search
+    participant Crawler as Background Task
+    participant Firecrawl
     participant OpenAI
+    participant DB as MongoDB Atlas
     
-    Widget->>API: POST /chat {query, session_id, url}
-    API->>OpenAI: Embed user query
-    OpenAI-->>API: Query Vector
+    Dashboard->>API: POST /crawl (Seed URL)
+    API->>DB: Create crawl job
+    API-->>Dashboard: Return Job ID
+    API-)Crawler: Trigger async crawl
     
-    API->>DB: $vectorSearch (Query Vector, tenant_id)
-    DB-->>API: Top relevant child chunks with capped parent/window context
-    API->>DB: Load conversation history
+    Crawler->>Firecrawl: Start crawl
+    Firecrawl-->>Crawler: Pages as markdown
     
-    API->>OpenAI: ChatCompletion with Context (GPT-4o)
-    OpenAI-->>API: Final Answer
+    loop For each page
+        Crawler->>Crawler: MarkdownHeaderTextSplitter<br/>(split by #/##/###/####)
+        Crawler->>Crawler: Strip heading lines from body
+        
+        loop For each parent section
+            Crawler->>Crawler: RecursiveCharacterTextSplitter<br/>(500 tokens, 80 overlap)
+            Crawler->>Crawler: Prepend section_title to search_text
+        end
+        
+        loop For each batch of chunks
+            Crawler->>OpenAI: Embed search_text<br/>(text-embedding-3-small)
+            OpenAI-->>Crawler: 1536-dim vectors
+            Crawler->>DB: Store parents + chunks + embeddings
+        end
+    end
     
-    API->>DB: Save to conversation history
-    API-->>Widget: Answer + Sources
+    Crawler->>DB: Mark job as done
+```
+
+### 4. Hybrid Search Merge Strategy
+```mermaid
+flowchart TD
+    Q[User Query] --> RW[gpt-4o-mini<br/>Rewrite & Classify]
+    RW --> C{needs_search?}
+    
+    C -->|No - Greeting| GP["Conversational prompt<br/>No search, no context"]
+    C -->|Yes - Searchable| VE["$vectorSearch<br/>9 candidates fetched"]
+    C -->|Yes - Searchable| BE["$search / BM25<br/>6 candidates fetched"]
+    
+    VE --> VG[Top 3 unique parents<br/>by parent_id]
+    BE --> BG[Top 2 unique parents<br/>by parent_id]
+    
+    VG --> Merge{Merge & Dedup}
+    BG --> Merge
+    
+    Merge -->|3 vector + 2 BM25| PA[Parent Context Assembly]
+    
+    PA -->|≤1600 tokens| FS[Full parent section]
+    PA -->|>1600 tokens| CW[Child + 1 neighbor each side]
+    
+    FS --> CTX[Context Text]
+    CW --> CTX
+    
+    CTX --> SP["System Prompt:<br/>'Answer only from context'"]
+    SP --> LLM[gpt-4o]
+    LLM --> ANS[Final Answer + Sources]
 ```
 
 ## Prerequisites
@@ -106,13 +160,14 @@ VITE_API_BASE_URL=http://localhost:8000
 
 `VITE_API_BASE_URL` is used when building the dashboard so browser requests and generated widget snippets point to the backend.
 
-## 2. MongoDB Atlas Vector Search Setup
-1. Open MongoDB Atlas and navigate to your cluster.
-2. Go to the "Atlas Search" tab and click "Create Search Index".
-3. Select "JSON Editor".
-4. Database: `chatbot_db`, Collection: `chunks`
-5. Index Name: `vector_index`
-6. Paste the JSON from `mongodb_index.json`:
+## 2. MongoDB Atlas Indexes
+
+### Vector Search Index (`vector_index`)
+Navigate to **Atlas Search** → **Create Search Index** → **Vector Search**.
+
+- Database: `chatbot_db`, Collection: `chunks`
+- Index Name: `vector_index`
+
 ```json
 {
   "fields": [
@@ -125,15 +180,29 @@ VITE_API_BASE_URL=http://localhost:8000
     {
       "type": "filter",
       "path": "tenant_id"
-    },
-    {
-      "type": "filter",
-      "path": "url"
     }
   ]
 }
 ```
-7. Click "Next" and "Create Search Index".
+
+### Full-Text Search Index (`default`)
+Navigate to **Atlas Search** → **Create Search Index** → **Atlas Search**.
+
+- Database: `chatbot_db`, Collection: `chunks`
+- Index Name: `default`
+
+```json
+{
+  "mappings": {
+    "dynamic": false,
+    "fields": {
+      "text": { "type": "string" },
+      "section_title": { "type": "string" },
+      "tenant_id": { "type": "string" }
+    }
+  }
+}
+```
 
 The backend also creates regular MongoDB lookup indexes on startup for parent-child retrieval:
 - `parents`: `tenant_id`, `parent_id`
@@ -190,3 +259,55 @@ npm run dev
 4. Go to Crawl Jobs and start a crawl of your website (e.g., `https://example.com`).
 5. Add the copied script tag to your site's HTML file.
 6. Interact with the chat widget!
+
+## Key Design Decisions
+
+### Query Rewriting (LLM-based)
+User questions are rewritten by **gpt-4o-mini** before vector search. A conversational question like *"what is schoollog and what it does"* is transformed into **"schoollog school management software features overview"** — aligning better with the declarative website content in the vector store. The same LLM call also classifies whether the input is a greeting (skip search) or a searchable query.
+
+### Hybrid Search (Vector + BM25)
+- **3 guaranteed slots** from vector search (semantic matching via `$vectorSearch`)
+- **2 guaranteed slots** from BM25 full-text search (keyword matching via `$search`)
+- Results are deduplicated by `parent_id`
+- If BM25 doesn't fill its 2 slots, remaining slots are filled from vector results
+- Both searches run in parallel via `asyncio.gather`
+
+### Heading Prefix in Embeddings
+Section titles (e.g., *"Bus Tracking"*) are prepended to child chunk text before embedding (stored as `search_text`). The body text alone (*"Track school buses in real-time"*) misses the most descriptive keywords. The prefix is only used for embedding — the clean `text` field is served to GPT as context.
+
+### No Score Threshold
+Vector similarity scores are not filtered — the top results are always taken. Query rewriting and hybrid search provide enough precision. Score thresholds were causing false negatives (returning nothing for valid queries).
+
+### Empty Context Guard
+If search returns zero results for a non-greeting query, the system returns *"I don't have information about that on this site"* immediately — without calling GPT-4o — preventing hallucination.
+
+## Tech Stack
+
+| Component | Technology |
+|---|---|
+| Backend | Python 3.12+, FastAPI, Uvicorn |
+| Database | MongoDB Atlas (Motor async driver) |
+| Embeddings | OpenAI `text-embedding-3-small` |
+| Chat LLM | OpenAI `gpt-4o` |
+| Query Rewriting | OpenAI `gpt-4o-mini` |
+| Crawling | Firecrawl API |
+| Auth | JWT (python-jose) + API keys (bcrypt) |
+| Frontend (Dashboard) | React 18, Vite |
+| Frontend (Widget) | React 18, Vite (embedded as script tag) |
+| Chunking | LangChain (MarkdownHeaderTextSplitter + RecursiveCharacterTextSplitter) |
+| Token Counting | tiktoken (`cl100k_base`) |
+| Rate Limiting | slowapi |
+| Containerization | Docker Compose |
+
+## API Endpoints
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| POST | `/chat` | API Key | Chat with the widget |
+| POST | `/tenants/register` | None | Register a new tenant |
+| POST | `/tenants/login` | None | Login |
+| GET | `/tenants/stats` | JWT | Tenant stats |
+| POST | `/tenants/rotate-key` | JWT | Rotate API key |
+| POST | `/crawl` | JWT | Start a crawl job |
+| GET | `/crawl/{job_id}` | JWT | Check crawl status |
+| DELETE | `/index` | JWT | Delete indexed data |

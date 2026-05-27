@@ -1,50 +1,100 @@
+import asyncio
 from core.auth import db
 from services.embedder import embed_text
 from services.tokens import count_tokens
 
 MAX_PARENT_CONTEXT_TOKENS = 1600
 CHILD_CONTEXT_RADIUS = 1
+BM25_INDEX_NAME = "default"
 
-async def search_chunks(tenant_id: str, query: str, threshold: float = 0.75, top_k: int = 5):
-    query_vector = await embed_text(query)
-    child_limit = max(top_k * 3, top_k)
-    
+async def _vector_search(tenant_id: str, query_vector: list[float], limit: int) -> list[dict]:
     pipeline = [
         {
             "$vectorSearch": {
                 "index": "vector_index",
                 "path": "embedding",
                 "queryVector": query_vector,
-                "numCandidates": max(child_limit * 10, 100),
-                "limit": child_limit,
+                "numCandidates": max(limit * 10, 100),
+                "limit": limit,
                 "filter": {"tenant_id": tenant_id}
             }
         },
-        {
-            "$addFields": {
-                "score": {"$meta": "vectorSearchScore"}
-            }
-        },
-        {
-            "$project": {
-                "_id": 0,
-                "text": 1,
-                "url": 1,
-                "title": 1,
-                "parent_id": 1,
-                "section_title": 1,
-                "section_path": 1,
-                "chunk_index": 1,
-                "parent_index": 1,
-                "child_index": 1,
-                "token_count": 1,
-                "score": 1
-            }
-        }
+        {"$addFields": {"score": {"$meta": "vectorSearchScore"}}},
+        {"$project": {"_id": 0, "text": 1, "url": 1, "title": 1, "parent_id": 1,
+                      "section_title": 1, "section_path": 1, "chunk_index": 1,
+                      "parent_index": 1, "child_index": 1, "token_count": 1, "score": 1}},
     ]
-    
-    child_results = await db.chunks.aggregate(pipeline).to_list(length=child_limit)
-    child_results = [r for r in child_results if r.get("score", 0) >= threshold]
+    return await db.chunks.aggregate(pipeline).to_list(length=limit)
+
+
+async def _bm25_search(tenant_id: str, query: str, top_k: int) -> list[dict]:
+    try:
+        pipeline = [
+            {
+                "$search": {
+                    "index": BM25_INDEX_NAME,
+                    "text": {"query": query, "path": ["text", "section_title"]}
+                }
+            },
+            {"$match": {"tenant_id": tenant_id}},
+            {"$addFields": {"score": {"$meta": "searchScore"}}},
+            {"$project": {"_id": 0, "text": 1, "url": 1, "title": 1, "parent_id": 1,
+                          "section_title": 1, "section_path": 1, "chunk_index": 1,
+                          "parent_index": 1, "child_index": 1, "token_count": 1, "score": 1}},
+            {"$limit": top_k},
+        ]
+        return await db.chunks.aggregate(pipeline).to_list(length=top_k)
+    except Exception:
+        # If BM25 index doesn't exist yet, silently skip
+        return []
+
+
+async def search_chunks(tenant_id: str, query: str, top_k: int = 5):
+    query_vector = await embed_text(query)
+    vector_slots = max(top_k - 2, 1)   # 3 slots from vector
+    bm25_slots = top_k - vector_slots  # 2 slots from BM25
+    child_limit = vector_slots * 3     # 9 candidates needed to find 3 unique parents
+
+    # Run vector search and BM25 search in parallel
+    vector_task = _vector_search(tenant_id, query_vector, child_limit)
+    bm25_task = _bm25_search(tenant_id, query, bm25_slots * 3)
+    vector_results, bm25_results = await asyncio.gather(vector_task, bm25_task)
+
+    # Guaranteed slots: 3 from vector, 2 from BM25, deduplicated
+    seen_ids = set()
+    merged = []
+
+    # First: guaranteed vector slots
+    for r in vector_results:
+        pid = r.get("parent_id")
+        if pid and pid not in seen_ids:
+            seen_ids.add(pid)
+            merged.append(r)
+            if len(merged) >= vector_slots:
+                break
+
+    # Then: guaranteed BM25 slots (filling gaps vector didn't cover)
+    bm25_added = 0
+    for r in bm25_results:
+        if bm25_added >= bm25_slots:
+            break
+        pid = r.get("parent_id")
+        if pid and pid not in seen_ids:
+            seen_ids.add(pid)
+            merged.append(r)
+            bm25_added += 1
+
+    # Finally: if BM25 didn't fill all its slots, fill with more vector results
+    if len(merged) < top_k:
+        for r in vector_results:
+            pid = r.get("parent_id")
+            if pid and pid not in seen_ids:
+                seen_ids.add(pid)
+                merged.append(r)
+                if len(merged) >= top_k:
+                    break
+
+    child_results = merged
 
     parent_ids = list(dict.fromkeys(r["parent_id"] for r in child_results if r.get("parent_id")))
     parents_by_id = {}

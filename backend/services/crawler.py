@@ -169,7 +169,10 @@ async def _index_page(
         })
 
         child_chunks = _split_child_chunks(child_splitter, parent_text)
+        section_label = section["section_title"] or section["section_path"]
         for child_index, child in enumerate(child_chunks):
+            # Prepend section heading so embeddings capture key descriptive keywords
+            prefixed = f"{section_label}:\n{child}"
             child_records.append({
                 "parent_id": parent_id,
                 "parent_index": parent_index,
@@ -178,7 +181,8 @@ async def _index_page(
                 "section_path": section["section_path"],
                 "headings": section["headings"],
                 "text": child,
-                "token_count": count_tokens(child),
+                "search_text": prefixed,
+                "token_count": count_tokens(prefixed),
             })
 
     if not child_records:
@@ -189,7 +193,7 @@ async def _index_page(
     for start in range(0, len(child_records), EMBEDDING_BATCH_SIZE):
         batch = child_records[start:start + EMBEDDING_BATCH_SIZE]
         try:
-            embeddings = await embed_texts([item["text"] for item in batch])
+            embeddings = await embed_texts([item["search_text"] for item in batch])
         except Exception as exc:
             print(f"Embedding batch failed for {url}: {exc}")
             embedding_errors += len(batch)
