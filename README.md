@@ -19,7 +19,7 @@ graph TD
 ```
 
 ### 2. Firecrawl Crawling & Indexing Flow
-Firecrawl handles site crawling and markdown extraction. The backend splits each page into parent sections by markdown headings, embeds token-based child chunks from those sections, and stores the indexed content in MongoDB.
+Firecrawl handles site crawling and markdown extraction. The backend splits each page into parent sections by markdown headings, skips heading-only sections, embeds token-based child chunks from useful sections, and stores the indexed content in MongoDB.
 
 ```mermaid
 sequenceDiagram

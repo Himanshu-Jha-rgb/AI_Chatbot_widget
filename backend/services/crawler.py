@@ -1,4 +1,5 @@
 import asyncio
+import re
 import uuid
 from datetime import datetime, timezone
 
@@ -13,6 +14,7 @@ MAX_PAGES = 200
 CHILD_CHUNK_TOKENS = 500
 CHILD_CHUNK_OVERLAP_TOKENS = 80
 MIN_CHILD_CHUNK_TOKENS = 40
+MIN_SECTION_BODY_TOKENS = 8
 EMBEDDING_BATCH_SIZE = 100
 MARKDOWN_HEADERS = [
     ("#", "heading_1"),
@@ -285,6 +287,10 @@ def _build_parent_sections(
         if not text:
             continue
 
+        body_text = _section_body_text(text)
+        if not body_text or count_tokens(body_text) < MIN_SECTION_BODY_TOKENS:
+            continue
+
         headings = {key: value for key, value in doc.metadata.items() if key in HEADING_KEYS}
         section_path_parts = [headings[key] for key in HEADING_KEYS if headings.get(key)]
         section_path = " > ".join(section_path_parts) or page_title or "Untitled section"
@@ -335,3 +341,13 @@ def _split_child_chunks(
             chunks.append(pending)
 
     return chunks
+
+def _section_body_text(section_text: str) -> str:
+    body_lines = []
+    for line in section_text.splitlines():
+        if re.match(r"^\s{0,3}#{1,6}\s+", line):
+            continue
+
+        body_lines.append(line)
+
+    return "\n".join(body_lines).strip()
