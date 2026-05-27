@@ -3,6 +3,15 @@ import { createRoot } from 'react-dom/client';
 import { Widget } from './Widget';
 
 const init = () => {
+
+    const devRoot = document.getElementById('root');
+    if (devRoot) {
+        const root = createRoot(devRoot);
+        root.render(<Widget apiKey="sk_live_MglQoDyAC0gO2gNornqkZxdzavW4qw14vAlQljcR6JQ" apiBaseUrl="http://localhost:8000" />);
+        return;
+    }
+    
+
     let scriptTag = document.currentScript;
     if (!scriptTag) {
         const scripts = document.getElementsByTagName('script');
