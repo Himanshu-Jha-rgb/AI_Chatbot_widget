@@ -64,7 +64,8 @@ async def verify_api_key(request: Request, credentials: HTTPAuthorizationCredent
         raise HTTPException(status_code=403, detail="Invalid API Key")
         
     origin = request.headers.get("origin")
-    if origin and tenant["domain"] not in origin and "localhost" not in origin:
-        pass # In production, strictly check origin
+    if origin and settings.ENFORCE_DOMAIN and "localhost" not in origin:
+        if tenant["domain"] not in origin:
+            raise HTTPException(status_code=403, detail="Domain not allowed")
         
     return tenant

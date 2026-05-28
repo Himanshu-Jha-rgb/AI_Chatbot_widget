@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { chat } from './api';
-import { v4 as uuidv4 } from 'uuid';
 import ReactMarkdown from 'react-markdown';
 
 export const Widget = ({ apiKey, apiBaseUrl }) => {
@@ -8,17 +7,7 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [sessionId, setSessionId] = useState('');
     const messagesEndRef = useRef(null);
-
-    useEffect(() => {
-        let sid = sessionStorage.getItem('chat_session_id');
-        if (!sid) {
-            sid = uuidv4();
-            sessionStorage.setItem('chat_session_id', sid);
-        }
-        setSessionId(sid);
-    }, []);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -35,7 +24,6 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
         try {
             const res = await chat(
                 input,
-                sessionId,
                 window.location.href,
                 document.title,
                 apiKey,

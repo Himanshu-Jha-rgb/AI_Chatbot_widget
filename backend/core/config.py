@@ -6,6 +6,9 @@ class Settings(BaseSettings):
     FIRECRAWL_API_KEY: str = ""
     JWT_SECRET: str = "your-secret"
     ALLOWED_ORIGINS: str = "*"
+    COOKIE_SECURE: bool = True
+    COOKIE_SAMESITE: str = "none"
+    ENFORCE_DOMAIN: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", extra='ignore')
 

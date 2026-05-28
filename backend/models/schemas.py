@@ -23,7 +23,7 @@ class CrawlJobResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     query: str
-    session_id: str
+    session_id: Optional[str] = None
     current_url: str
     current_page_title: str
 
