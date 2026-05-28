@@ -5,7 +5,7 @@ from services.tokens import count_tokens
 
 MAX_PARENT_CONTEXT_TOKENS = 1600
 CHILD_CONTEXT_RADIUS = 1
-BM25_INDEX_NAME = "default"
+BM25_INDEX_NAME = "BM25_textsearch"
 
 async def _vector_search(tenant_id: str, query_vector: list[float], limit: int) -> list[dict]:
     pipeline = [

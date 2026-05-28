@@ -6,6 +6,9 @@ from services.embedder import openai_client
 
 router = APIRouter(tags=["chat"])
 
+# Max messages to send to GPT-4o (2 per turn = 10 turns of conversation)
+MAX_HISTORY = 20
+
 @router.post("/chat", response_model=ChatResponse)
 @limiter.limit("60/minute")
 async def chat(request: Request, req: ChatRequest, current_tenant: dict = Depends(verify_api_key)):
@@ -58,17 +61,17 @@ async def chat(request: Request, req: ChatRequest, current_tenant: dict = Depend
             seen_sources.add(source_key)
 
     if not needs_search:
-        system_prompt = f"You are a helpful assistant for {domain}. Respond conversationally to the user."
+        system_prompt = f"You are a representative of {domain}. Respond conversationally to the user using 'we' and 'our', never referring to yourself as a third party."
     else:
-        system_prompt = f"""You are a helpful assistant for {domain}. Answer only from the provided context.
+        system_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. Answer only from the provided context.
 The user is currently on page: {req.current_url} titled {req.current_page_title}.
 Context: {context_text}"""
 
     messages.append({"role": "user", "content": req.query})
 
-    # We shouldn't send the entire unbounded history to OpenAI to avoid token limits,
-    # but for simplicity we send it. In production, we'd slice it.
-    api_messages = [{"role": "system", "content": system_prompt}] + messages
+    # Send only the last MAX_HISTORY messages to control token usage.
+    # Full history is still stored in MongoDB (see update below).
+    api_messages = [{"role": "system", "content": system_prompt}] + messages[-MAX_HISTORY:]
 
     response = await openai_client.chat.completions.create(
         model="gpt-4o",

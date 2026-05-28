@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { chat } from './api';
 import { v4 as uuidv4 } from 'uuid';
+import ReactMarkdown from 'react-markdown';
 
 export const Widget = ({ apiKey, apiBaseUrl }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -80,15 +81,48 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
                         )}
                         {messages.map((m, i) => (
                             <div key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
-                                <div style={{ 
-                                    padding: '10px 14px', 
-                                    borderRadius: '12px', 
+                                <div style={{
+                                    padding: '10px 14px',
+                                    borderRadius: '12px',
                                     backgroundColor: m.role === 'user' ? '#0070f3' : '#fff',
                                     color: m.role === 'user' ? '#fff' : '#333',
                                     border: m.role === 'user' ? 'none' : '1px solid #eaeaea',
-                                    boxShadow: m.role === 'user' ? 'none' : '0 2px 5px rgba(0,0,0,0.02)'
+                                    boxShadow: m.role === 'user' ? 'none' : '0 2px 5px rgba(0,0,0,0.02)',
+                                    lineHeight: '1.6',
+                                    fontSize: '14px',
+                                    wordBreak: 'break-word'
                                 }}>
-                                    {m.content}
+                                    {m.role === 'user' ? (
+                                        m.content
+                                    ) : (
+                                        <ReactMarkdown
+                                            components={{
+                                                a: ({ href, children }) => (
+                                                    <a href={href} target="_blank" rel="noopener noreferrer"
+                                                       style={{ color: '#0070f3', textDecoration: 'underline' }}>
+                                                        {children}
+                                                    </a>
+                                                ),
+                                                strong: ({ children }) => (
+                                                    <strong style={{ fontWeight: 600 }}>{children}</strong>
+                                                ),
+                                                p: ({ children }) => (
+                                                    <p style={{ margin: '4px 0', lineHeight: '1.6' }}>{children}</p>
+                                                ),
+                                                ul: ({ children }) => (
+                                                    <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>{children}</ul>
+                                                ),
+                                                ol: ({ children }) => (
+                                                    <ol style={{ margin: '4px 0', paddingLeft: '20px' }}>{children}</ol>
+                                                ),
+                                                li: ({ children }) => (
+                                                    <li style={{ margin: '2px 0' }}>{children}</li>
+                                                ),
+                                            }}
+                                        >
+                                            {m.content}
+                                        </ReactMarkdown>
+                                    )}
                                 </div>
                                 {m.sources && m.sources.length > 0 && (
                                     <div style={{ fontSize: '12px', marginTop: '4px', color: '#666' }}>
