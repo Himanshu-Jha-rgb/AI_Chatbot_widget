@@ -66,8 +66,12 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
         pass  # Visitor tracking must never break the chat
     # --- end session resolution ---
 
-    # Rewrite query and classify (greeting vs searchable)
-    search_query, needs_search = await _rewrite_search_query(req.query)
+    # Rewrite query and classify (greeting vs searchable vs out-of-scope)
+    search_query, needs_search, is_out_of_scope = await _rewrite_search_query(req.query)
+
+    if is_out_of_scope:
+        answer = f"I'm here to answer questions about {domain}. I don't have information about that."
+        return ChatResponse(answer=answer, sources=[])
 
     if needs_search:
         chunks = await search_chunks(tenant_id, search_query)
@@ -80,8 +84,17 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
 
     # If no relevant content found and it's not a greeting, don't let the model hallucinate
     if needs_search and not chunks:
-        answer = "I don't have information about that on this site."
         messages.append({"role": "user", "content": req.query})
+        no_context_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. You do not have any information to answer the user's question, so do not make up content and do not answer unrelated questions. However, if the user is asking about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]. Otherwise, politely say you don't have that information."""
+        api_messages = [{"role": "system", "content": no_context_prompt}] + messages[-MAX_HISTORY:]
+        response = await openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=api_messages
+        )
+        answer = response.choices[0].message.content
+        show_form = "[ENQUIRY_FORM]" in answer
+        if show_form:
+            answer = answer.replace("[ENQUIRY_FORM]", "").strip()
         messages.append({"role": "assistant", "content": answer})
         await db.conversations.update_one(
             {"session_id": session_id},
@@ -93,7 +106,7 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
             {"$addToSet": {"conversation_ids": session_id},
              "$inc": {"total_messages": 1}}
         )
-        return ChatResponse(answer=answer, sources=[])
+        return ChatResponse(answer=answer, sources=[], show_enquiry_form=show_form)
 
     context_text = "\n\n".join([
         _format_context_chunk(c)
@@ -117,11 +130,12 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
             seen_sources.add(source_key)
 
     if not needs_search:
-        system_prompt = f"You are a representative of {domain}. Respond conversationally to the user using 'we' and 'our', never referring to yourself as a third party."
+        system_prompt = f"You are a representative of {domain}. Respond conversationally to the user using 'we' and 'our', never referring to yourself as a third party. Do not answer questions unrelated to {domain}. If the user asks about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]."
     else:
-        system_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. Answer only from the provided context.
+        system_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. Answer only from the provided context. If the context does not contain information relevant to the user's question, say "I don't have information about that" — do not answer unrelated questions or make up content.
 The user is currently on page: {req.current_url} titled {req.current_page_title}.
-Context: {context_text}"""
+Context: {context_text}
+If the user asks about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]."""
 
     messages.append({"role": "user", "content": req.query})
 
@@ -134,6 +148,11 @@ Context: {context_text}"""
         messages=api_messages
     )
     answer = response.choices[0].message.content
+
+    # Detect and strip enquiry form marker
+    show_form = "[ENQUIRY_FORM]" in answer
+    if show_form:
+        answer = answer.replace("[ENQUIRY_FORM]", "").strip()
 
     messages.append({"role": "assistant", "content": answer})
 
@@ -150,7 +169,7 @@ Context: {context_text}"""
          "$inc": {"total_messages": 1}}
     )
 
-    return ChatResponse(answer=answer, sources=sources)
+    return ChatResponse(answer=answer, sources=sources, show_enquiry_form=show_form)
 
 def _format_context_chunk(chunk: dict) -> str:
     title = chunk.get("title") or "Relevant Page"
@@ -168,20 +187,27 @@ def _format_context_chunk(chunk: dict) -> str:
 _query_rewrite_cache: dict[str, tuple[str, bool]] = {}
 
 _QUERY_REWRITE_SYSTEM_PROMPT = (
-    "You are a search query optimizer for a website RAG system. "
+    "You are a query classifier for a company website chatbot. "
     "Classify the user's input and respond in this exact format:\n\n"
     "If it's a greeting, thankyou, small talk, or chitchat → respond: GREETING\n"
+    "If the user is asking about something completely unrelated to the company, "
+    "its products, services, or the website content — like famous people, weather, "
+    "general knowledge, jokes, external topics → respond: OUT_OF_SCOPE\n"
     "Otherwise → rewrite the user's question into a concise search query that would match "
     "relevant website content. Extract the core nouns and key concepts. "
     "Respond with ONLY the rewritten query — no preamble, no explanation, no quotes."
 )
 
 
-async def _rewrite_search_query(query: str) -> tuple[str, bool]:
-    """Returns (search_query, needs_search). Greetings/small talk get needs_search=False."""
+async def _rewrite_search_query(query: str) -> tuple[str, bool, bool]:
+    """Returns (search_query, needs_search, is_out_of_scope).
+    Greetings → needs_search=False, is_out_of_scope=False.
+    Out-of-scope → needs_search=False, is_out_of_scope=True.
+    Searchable → needs_search=True, is_out_of_scope=False.
+    """
     q = query.strip()
     if len(q) < 4:
-        return q, False
+        return q, False, False
 
     # Check cache
     cached = _query_rewrite_cache.get(q)
@@ -201,13 +227,15 @@ async def _rewrite_search_query(query: str) -> tuple[str, bool]:
         response_text = resp.choices[0].message.content.strip()
 
         if response_text == "GREETING":
-            result = (q, False)
+            result = (q, False, False)
+        elif response_text == "OUT_OF_SCOPE":
+            result = (q, False, True)
         else:
             rewritten = response_text
             # Sanity check: don't use if it's empty or absurdly long
             if not rewritten or len(rewritten) > 200:
                 rewritten = q
-            result = (rewritten, True)
+            result = (rewritten, True, False)
 
         # Cache the result
         _query_rewrite_cache[q] = result

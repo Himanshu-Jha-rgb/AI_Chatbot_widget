@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { chat } from './api';
+import { chat, submitEnquiry } from './api';
 import ReactMarkdown from 'react-markdown';
 
 export const Widget = ({ apiKey, apiBaseUrl }) => {
@@ -7,14 +7,27 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [formData, setFormData] = useState({ name: '', email: '', phone: '' });
     const messagesEndRef = useRef(null);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
 
+    const clearEnquiryForms = () => {
+        setMessages(prev => prev.map(m => {
+            if (m.role === 'assistant' && m.showEnquiryForm && !m.enquirySubmitted) {
+                return { ...m, showEnquiryForm: false };
+            }
+            return m;
+        }));
+    };
+
     const handleSend = async () => {
         if (!input.trim()) return;
+
+        // Hide any unsubmitted enquiry forms
+        clearEnquiryForms();
 
         const userMsg = { role: 'user', content: input };
         setMessages(prev => [...prev, userMsg]);
@@ -29,18 +42,47 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
                 apiKey,
                 apiBaseUrl
             );
-            
-            const botMsg = { 
-                role: 'assistant', 
-                content: res.answer, 
-                sources: res.sources 
+
+            const botMsg = {
+                role: 'assistant',
+                content: res.answer,
+                sources: res.sources,
+                showEnquiryForm: res.show_enquiry_form || false,
+                enquirySubmitted: false
             };
             setMessages(prev => [...prev, botMsg]);
+            setFormData({ name: '', email: '', phone: '' });
         } catch (error) {
             console.error("Chat error:", error);
             setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, an error occurred.' }]);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleEnquirySubmit = async (msgIndex) => {
+        const { name, email, phone } = formData;
+        if (!name.trim() || !email.trim()) return;
+
+        // Get session_id from cookie or generate one
+        const getSessionId = () => {
+            const match = document.cookie.match(/(?:^|;\s*)chat_session_id=([^;]*)/);
+            return match ? decodeURIComponent(match[1]) : '';
+        };
+
+        try {
+            await submitEnquiry({
+                name: name.trim(),
+                email: email.trim(),
+                phone: phone.trim(),
+                session_id: getSessionId(),
+            }, apiKey, apiBaseUrl);
+
+            setMessages(prev => prev.map((m, i) =>
+                i === msgIndex ? { ...m, enquirySubmitted: true } : m
+            ));
+        } catch (error) {
+            console.error("Enquiry submit error:", error);
         }
     };
 
@@ -123,6 +165,44 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
                                                 </a>
                                             );
                                         })}
+                                    </div>
+                                )}
+                                {m.showEnquiryForm && !m.enquirySubmitted && (
+                                    <div style={{ marginTop: '10px', borderTop: '1px solid #eaeaea', paddingTop: '10px' }}>
+                                        <p style={{ margin: '0 0 8px 0', fontSize: '13px', color: '#555' }}>Leave your contact details and we'll get back to you:</p>
+                                        <input
+                                            type="text"
+                                            placeholder="Your Name *"
+                                            value={formData.name}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                                            style={{ width: '100%', padding: '8px', marginBottom: '6px', borderRadius: '8px', border: '1px solid #ddd', outline: 'none', fontSize: '13px', boxSizing: 'border-box' }}
+                                        />
+                                        <input
+                                            type="email"
+                                            placeholder="Your Email *"
+                                            value={formData.email}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                                            style={{ width: '100%', padding: '8px', marginBottom: '6px', borderRadius: '8px', border: '1px solid #ddd', outline: 'none', fontSize: '13px', boxSizing: 'border-box' }}
+                                        />
+                                        <input
+                                            type="tel"
+                                            placeholder="Your Phone (optional)"
+                                            value={formData.phone}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                                            style={{ width: '100%', padding: '8px', marginBottom: '8px', borderRadius: '8px', border: '1px solid #ddd', outline: 'none', fontSize: '13px', boxSizing: 'border-box' }}
+                                        />
+                                        <button
+                                            onClick={() => handleEnquirySubmit(i)}
+                                            disabled={!formData.name.trim() || !formData.email.trim()}
+                                            style={{ width: '100%', padding: '8px', borderRadius: '8px', border: 'none', backgroundColor: '#0070f3', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '13px', opacity: formData.name.trim() && formData.email.trim() ? 1 : 0.6 }}
+                                        >
+                                            Submit
+                                        </button>
+                                    </div>
+                                )}
+                                {m.showEnquiryForm && m.enquirySubmitted && (
+                                    <div style={{ marginTop: '8px', fontSize: '13px', color: '#28a745', fontStyle: 'italic' }}>
+                                        Thanks! We'll get back to you soon.
                                     </div>
                                 )}
                             </div>

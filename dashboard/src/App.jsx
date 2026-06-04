@@ -8,6 +8,7 @@ import Sources from './pages/Sources';
 import PDFUpload from './pages/PDFUpload';
 import FAQs from './pages/FAQs';
 import TextDocs from './pages/TextDocs';
+import Leads from './pages/Leads';
 import { clearSession } from './api';
 
 const Layout = ({ children }) => {
@@ -24,6 +25,7 @@ const Layout = ({ children }) => {
                 <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '2rem' }}>
                     <Link to="/" style={{ color: '#aaa', textDecoration: 'none' }}>Overview</Link>
                     <Link to="/sources" style={{ color: '#aaa', textDecoration: 'none' }}>Knowledge Sources</Link>
+                    <Link to="/leads" style={{ color: '#aaa', textDecoration: 'none' }}>Leads</Link>
                     <Link to="/crawl" style={{ color: '#aaa', textDecoration: 'none' }}>Website Crawl</Link>
                     <Link to="/settings" style={{ color: '#aaa', textDecoration: 'none' }}>Settings</Link>
                     <button onClick={handleLogout} style={{ marginTop: 'auto', background: 'none', border: 'none', color: '#ff4444', textAlign: 'left', cursor: 'pointer', padding: 0 }}>Logout</button>
@@ -52,6 +54,7 @@ const App = () => {
                 <Route path="/sources/faqs/:sourceId" element={<PrivateRoute><FAQs /></PrivateRoute>} />
                 <Route path="/sources/docs/:sourceId" element={<PrivateRoute><TextDocs /></PrivateRoute>} />
                 <Route path="/crawl" element={<PrivateRoute><Crawl /></PrivateRoute>} />
+                <Route path="/leads" element={<PrivateRoute><Leads /></PrivateRoute>} />
                 <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
                 <Route path="*" element={<Navigate to="/" />} />
             </Routes>

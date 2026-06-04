@@ -21,3 +21,20 @@ export const chat = async (query, current_url, current_page_title, apiKey, apiBa
 
     return response.json();
 };
+
+export const submitEnquiry = async (data, apiKey, apiBaseUrl = DEFAULT_API_BASE_URL) => {
+    const response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}/leads`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(data)
+    });
+
+    if (!response.ok) {
+        throw new Error("Enquiry submission failed");
+    }
+
+    return response.json();
+};

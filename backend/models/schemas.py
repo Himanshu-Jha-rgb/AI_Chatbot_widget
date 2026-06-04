@@ -36,6 +36,7 @@ class Source(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
     sources: List[Source]
+    show_enquiry_form: bool = False
 
 # --- Source Management ---
 
@@ -87,3 +88,26 @@ class TextDocResponse(BaseModel):
     body: str
     created_at: datetime
     updated_at: datetime
+
+# --- Leads / Enquiry Form ---
+
+class EnquirySubmit(BaseModel):
+    name: str
+    email: str
+    phone: Optional[str] = None
+    message: Optional[str] = None
+    session_id: str
+
+class LeadResponse(BaseModel):
+    success: bool
+    message: str
+
+class DashboardLead(BaseModel):
+    lead_id: str
+    name: str
+    email: str
+    phone: Optional[str] = None
+    message: Optional[str] = None
+    session_id: str
+    source_url: Optional[str] = None
+    created_at: datetime
