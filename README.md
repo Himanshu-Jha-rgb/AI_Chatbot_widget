@@ -260,6 +260,72 @@ npm run dev
 5. Add the copied script tag to your site's HTML file.
 6. Interact with the chat widget!
 
+## Extra Knowledge Sources
+
+Beyond website crawling, the platform supports **four types** of knowledge sources. All sources feed into the same unified vector + BM25 search index per tenant.
+
+### Source Types
+
+| Type | Input Method | Indexing Trigger |
+|------|-------------|-----------------|
+| **Website** | Seed URL → Firecrawl crawls pages | Automatic (during crawl) |
+| **PDF** | File upload (`.pdf`) | Automatic (on upload) |
+| **FAQ** | Manual Q&A pairs via dashboard | Explicit ("Index" button) |
+| **Text Document** | Free-form text / markdown via dashboard | Explicit ("Index" button) |
+
+### Ingestion Pipeline (Common to All Sources)
+
+All source types pass through the same pipeline in `backend/services/ingestion.py`:
+
+```mermaid
+flowchart LR
+    A[Raw Content] --> B[MarkdownHeaderTextSplitter<br/>Split by #/##/###/####]
+    B --> C[Parent Sections]
+    C --> D[RecursiveCharacterTextSplitter<br/>500 tokens, 80 overlap]
+    D --> E[Child Chunks]
+    E --> F[Prepend section_title<br/>to search_text]
+    F --> G[OpenAI text-embedding-3-small<br/>Batch of 100]
+    G --> H[(MongoDB Atlas<br/>chunks collection)]
+```
+
+1. **Section Splitting** — Content is split by markdown headings (H1–H4) into parent sections using `MarkdownHeaderTextSplitter`. Sections under 8 tokens of body text are filtered. Unstructured content becomes a single parent.
+2. **Chunk Splitting** — Each parent is split into child chunks of ~500 tokens with 80-token overlap via `RecursiveCharacterTextSplitter`. Tiny chunks (< 40 tokens) are merged into neighbors.
+3. **Heading Prefix** — The section title is prepended to each child chunk's `search_text` field (used for embedding only), improving semantic retrieval. The clean `text` is served as LLM context.
+4. **Embedding** — Chunks are embedded in batches of 100 via OpenAI `text-embedding-3-small` (1536 dimensions), with 3 retries and exponential backoff.
+5. **Storage** — Each source produces three document types in MongoDB:
+   - `pages` — One document per page/document with full raw content
+   - `parents` — One document per markdown section
+   - `chunks` — Child chunks with embeddings (the searchable unit)
+
+### Source Lifecycle
+
+#### Website Crawls
+- Submitted via `POST /dashboard/crawl` with a seed URL.
+- Background task calls Firecrawl API (up to 200 pages), ingests each page as markdown.
+- Old chunks for re-crawled URLs are automatically cleaned up (dedup by `crawl_id`).
+
+#### PDF Uploads
+- Uploaded via `POST /dashboard/sources/pdf/upload`.
+- Text is extracted page-by-page via PyMuPDF (`fitz`), formatted as `## Page N` markdown.
+- A `sources` record is created with `status: "indexing"`, updated to `"ready"` on completion.
+
+#### FAQs
+1. Create a FAQ source container via `POST /dashboard/sources` (type: `faq`).
+2. Add Q&A pairs via `POST /dashboard/sources/{source_id}/faqs`. Raw pairs stored in the `faqs` collection.
+3. Click **"Index"** to trigger background ingestion — formats each as `Q: ...\nA: ...` and runs the pipeline.
+4. Can re-index to pick up new or updated FAQs (clears existing indexed data first).
+
+#### Text Documents
+1. Create a text document source container via `POST /dashboard/sources` (type: `text`).
+2. Add documents (title + body) via `POST /dashboard/sources/{source_id}/docs`.
+3. Click **"Index"** to trigger background ingestion — same pattern as FAQs.
+
+### Search-Time Behavior
+
+- All indexed sources within a tenant are searched **together** as a single pool — there is no filtering by source type or source ID at query time.
+- The hybrid search (3 vector + 2 BM25) retrieves the most relevant chunks regardless of which source type they came from.
+- Sources can be deleted from the dashboard, which removes all associated chunks, parents, and pages.
+
 ## Key Design Decisions
 
 ### Query Rewriting (LLM-based)
@@ -311,3 +377,21 @@ If search returns zero results for a non-greeting query, the system returns *"I 
 | POST | `/crawl` | JWT | Start a crawl job |
 | GET | `/crawl/{job_id}` | JWT | Check crawl status |
 | DELETE | `/index` | JWT | Delete indexed data |
+| GET | `/dashboard/sources` | JWT | List all knowledge sources |
+| POST | `/dashboard/sources` | JWT | Create a source container |
+| GET | `/dashboard/sources/{source_id}` | JWT | Get source details + chunk count |
+| DELETE | `/dashboard/sources/{source_id}` | JWT | Delete source + indexed data |
+| POST | `/dashboard/sources/pdf/upload` | JWT | Upload and index a PDF |
+| GET | `/dashboard/sources/{source_id}/faqs` | JWT | List FAQs in a source |
+| POST | `/dashboard/sources/{source_id}/faqs` | JWT | Add a FAQ pair |
+| PUT | `/dashboard/sources/{source_id}/faqs/{faq_id}` | JWT | Update a FAQ |
+| DELETE | `/dashboard/sources/{source_id}/faqs/{faq_id}` | JWT | Delete a FAQ + its chunks |
+| POST | `/dashboard/sources/{source_id}/faqs/index` | JWT | Index all FAQs for search |
+| GET | `/dashboard/sources/{source_id}/docs` | JWT | List text documents in a source |
+| POST | `/dashboard/sources/{source_id}/docs` | JWT | Create a text document |
+| PUT | `/dashboard/sources/{source_id}/docs/{doc_id}` | JWT | Update a text document |
+| DELETE | `/dashboard/sources/{source_id}/docs/{doc_id}` | JWT | Delete a text document + its chunks |
+| POST | `/dashboard/sources/{source_id}/docs/index` | JWT | Index all text documents for search |
+| POST | `/dashboard/crawl` | JWT | Start a crawl (dashboard) |
+| GET | `/dashboard/crawl/{job_id}` | JWT | Check crawl status (dashboard) |
+| DELETE | `/dashboard/index` | JWT | Delete indexed data (dashboard) |
