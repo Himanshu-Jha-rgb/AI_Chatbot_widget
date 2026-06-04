@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
-from routers import tenants, crawl, chat
+from routers import tenants, crawl, chat, sources, faqs, text_docs
 from core.config import settings
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -46,9 +46,13 @@ app.add_middleware(CORSRreflectMiddleware)
 app.include_router(tenants.router)
 app.include_router(crawl.router)
 app.include_router(chat.router)
+app.include_router(sources.router)
+app.include_router(faqs.router)
+app.include_router(text_docs.router)
 
 # Mount widget dist directory
 os.makedirs("../widget/dist", exist_ok=True)
+os.makedirs("uploads", exist_ok=True)
 app.mount("/static", StaticFiles(directory="../widget/dist"), name="static")
 
 @app.get("/")
@@ -58,11 +62,17 @@ def root():
 @app.on_event("startup")
 async def ensure_lookup_indexes():
     await db.parents.create_index([("tenant_id", 1), ("parent_id", 1)])
+    await db.parents.create_index([("tenant_id", 1), ("source_id", 1)])
     await db.chunks.create_index([("tenant_id", 1), ("parent_id", 1), ("child_index", 1)])
+    await db.chunks.create_index([("tenant_id", 1), ("source_id", 1)])
     await db.pages.create_index([("tenant_id", 1), ("url", 1)])
+    await db.pages.create_index([("tenant_id", 1), ("source_id", 1)])
     await db.visitors.create_index("session_id")
     await db.tenants.create_index("tenant_id", unique=True)
     await db.tenants.create_index("api_key", unique=True)
     await db.tenants.create_index("domain")
     await db.conversations.create_index("session_id")
     await db.crawl_jobs.create_index([("job_id", 1), ("tenant_id", 1)])
+    await db.sources.create_index([("tenant_id", 1), ("source_id", 1)])
+    await db.faqs.create_index([("tenant_id", 1), ("source_id", 1), ("faq_id", 1)])
+    await db.documents.create_index([("tenant_id", 1), ("source_id", 1), ("doc_id", 1)])

@@ -36,3 +36,54 @@ class Source(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
     sources: List[Source]
+
+# --- Source Management ---
+
+class SourceCreate(BaseModel):
+    source_type: str = Field(..., pattern=r"^(pdf|faq|text|website)$")
+    name: str
+
+class SourceResponse(BaseModel):
+    source_id: str
+    source_type: str
+    name: str
+    status: str
+    chunk_count: int
+    config: dict
+    created_at: datetime
+    last_indexed_at: Optional[datetime] = None
+
+# --- FAQs ---
+
+class FAQCreate(BaseModel):
+    question: str
+    answer: str
+
+class FAQUpdate(BaseModel):
+    question: Optional[str] = None
+    answer: Optional[str] = None
+
+class FAQResponse(BaseModel):
+    faq_id: str
+    source_id: str
+    question: str
+    answer: str
+    created_at: datetime
+
+# --- Text Documents ---
+
+class TextDocCreate(BaseModel):
+    title: str
+    body: str
+
+class TextDocUpdate(BaseModel):
+    title: Optional[str] = None
+    body: Optional[str] = None
+
+class TextDocResponse(BaseModel):
+    doc_id: str
+    source_id: str
+    title: str
+    body: str
+    created_at: datetime
+    updated_at: datetime

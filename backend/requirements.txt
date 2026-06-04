@@ -13,3 +13,4 @@ openai
 tenacity
 slowapi
 tiktoken
+PyMuPDF

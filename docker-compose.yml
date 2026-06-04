@@ -16,6 +16,7 @@ services:
     volumes:
       - ./backend:/app
       - ./widget/dist:/widget/dist
+      - ./backend/uploads:/app/uploads
     depends_on:
       widget-builder:
         condition: service_completed_successfully
