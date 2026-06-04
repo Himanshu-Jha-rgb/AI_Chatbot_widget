@@ -14,7 +14,7 @@ router = APIRouter(tags=["chat"])
 # Max messages to send to GPT-4o (2 per turn = 10 turns of conversation)
 MAX_HISTORY = 20
 MAX_QUERY_LENGTH = 500
-PER_TENANT_RATE_LIMIT = 30
+PER_TENANT_RATE_LIMIT = 100
 PER_SESSION_RATE_LIMIT = 20
 RATE_WINDOW_SECONDS = 60
 
