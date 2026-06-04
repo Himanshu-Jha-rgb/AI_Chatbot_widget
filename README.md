@@ -326,6 +326,21 @@ flowchart LR
 - The hybrid search (3 vector + 2 BM25) retrieves the most relevant chunks regardless of which source type they came from.
 - Sources can be deleted from the dashboard, which removes all associated chunks, parents, and pages.
 
+## Rate Limiting & Abuse Protection
+
+Three layers of rate limiting protect the chat endpoint:
+
+| Layer | Scope | Limit | Mechanism | Purpose |
+|-------|-------|-------|-----------|---------|
+| **Per-IP** | Client IP address | 60 req/min | slowapi (`@limiter.limit`) | Basic request throttling |
+| **Per-tenant** | API key / tenant ID | 30 req/min | In-memory sliding window (`deque`) | Catches distributed attacks on a stolen key |
+| **Per-session** | `chat_session_id` cookie | 20 req/min | In-memory sliding window (`deque`) | Stops a single abusive user |
+| **Max query length** | All requests | 500 chars | Rejected with 400 | Prevents token waste on huge inputs |
+
+The per-IP and per-session limits catch individual bad actors. The per-tenant limit is the critical defense — since the API key is visible in the widget's script tag, a distributed attack using the same key from many IPs would bypass per-IP limits but is still blocked by the per-tenant sliding window.
+
+In-memory counters reset on server restart. For production at scale, replace with Redis-backed rate limiting.
+
 ## Key Design Decisions
 
 ### Query Rewriting (LLM-based)

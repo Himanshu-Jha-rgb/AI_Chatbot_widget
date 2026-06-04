@@ -1,16 +1,39 @@
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Request, Response, HTTPException
 from models.schemas import ChatRequest, ChatResponse, Source
 from core.auth import verify_api_key, db, limiter
 from core.config import settings
 from services.vector_search import search_chunks
 from services.embedder import openai_client
 import uuid
+import time
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 
 router = APIRouter(tags=["chat"])
 
 # Max messages to send to GPT-4o (2 per turn = 10 turns of conversation)
 MAX_HISTORY = 20
+MAX_QUERY_LENGTH = 500
+PER_TENANT_RATE_LIMIT = 30
+PER_SESSION_RATE_LIMIT = 20
+RATE_WINDOW_SECONDS = 60
+
+# In-memory sliding window rate limiters (reset on server restart)
+_tenant_limits: dict[str, deque] = defaultdict(deque)
+_session_limits: dict[str, deque] = defaultdict(deque)
+
+
+def _check_rate_limit(key: str, limits: dict, max_reqs: int) -> bool:
+    now = time.time()
+    window_start = now - RATE_WINDOW_SECONDS
+    dq = limits[key]
+    while dq and dq[0] < window_start:
+        dq.popleft()
+    if len(dq) >= max_reqs:
+        return False
+    dq.append(now)
+    return True
+
 
 @router.post("/chat", response_model=ChatResponse)
 @limiter.limit("60/minute")
@@ -18,11 +41,23 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
     tenant_id = current_tenant["tenant_id"]
     domain = current_tenant["domain"]
 
+    # --- Max query length ---
+    if len(req.query) > MAX_QUERY_LENGTH:
+        raise HTTPException(status_code=400, detail="Query too long.")
+
+    # --- Per-tenant rate limit (catches distributed attacks on a single key) ---
+    if not _check_rate_limit(tenant_id, _tenant_limits, PER_TENANT_RATE_LIMIT):
+        raise HTTPException(status_code=429, detail="Too many requests. Please slow down.")
+
     # --- Cookie-based session resolution ---
     now = datetime.now(timezone.utc)
     session_id = request.cookies.get("chat_session_id") or req.session_id
     if not session_id:
         session_id = str(uuid.uuid4())
+
+    # --- Per-session rate limit (catches a single abusive user) ---
+    if not _check_rate_limit(session_id, _session_limits, PER_SESSION_RATE_LIMIT):
+        raise HTTPException(status_code=429, detail="Too many requests. Please slow down.")
 
     fastapi_response.set_cookie(
         key="chat_session_id",
