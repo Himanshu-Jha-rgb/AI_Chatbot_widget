@@ -15,6 +15,9 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
+class WebhookUpdate(BaseModel):
+    webhook_url: str
+
 class CrawlRequest(BaseModel):
     seed_url: str
 

@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+import httpx
+from fastapi import APIRouter, Depends, BackgroundTasks
 
 from core.auth import db, get_current_tenant, verify_api_key
 from models.schemas import EnquirySubmit, LeadResponse
@@ -37,7 +38,7 @@ async def _summarize_context(context: str) -> str:
 
 
 @router.post("/leads", response_model=LeadResponse)
-async def submit_lead(req: EnquirySubmit, current_tenant: dict = Depends(verify_api_key)):
+async def submit_lead(req: EnquirySubmit, background_tasks: BackgroundTasks, current_tenant: dict = Depends(verify_api_key)):
     """Submit an enquiry form lead (from the widget)."""
     tenant_id = current_tenant["tenant_id"]
 
@@ -59,7 +60,27 @@ async def submit_lead(req: EnquirySubmit, current_tenant: dict = Depends(verify_
 
     await db.leads.insert_one(lead)
 
+    webhook_url = current_tenant.get("webhook_url")
+    if webhook_url:
+        background_tasks.add_task(_send_webhook, webhook_url, lead)
+
     return LeadResponse(success=True, message="Thank you! We'll get back to you soon.")
+
+async def _send_webhook(url: str, data: dict):
+    payload = {
+        "lead_id": data["lead_id"],
+        "name": data["name"],
+        "email": data["email"],
+        "phone": data["phone"],
+        "message": data["message"],
+        "created_at": data["created_at"].isoformat(),
+        "source_url": data["source_url"]
+    }
+    try:
+        async with httpx.AsyncClient() as client:
+            await client.post(url, json=payload, timeout=5.0)
+    except Exception as e:
+        print(f"Failed to send webhook to {url}: {e}")
 
 
 @router.get("/dashboard/leads")

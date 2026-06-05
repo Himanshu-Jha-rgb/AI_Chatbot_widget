@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from models.schemas import TenantRegister, TenantLogin, Token
+from models.schemas import TenantRegister, TenantLogin, Token, WebhookUpdate
 from core.auth import db, get_password_hash, verify_password, create_access_token, get_current_tenant
 import uuid
 import secrets
@@ -43,7 +43,8 @@ async def get_me(current_tenant: dict = Depends(get_current_tenant)):
         "tenant_id": current_tenant["tenant_id"],
         "domain": current_tenant["domain"],
         "plan": current_tenant.get("plan", "free"),
-        "api_key": current_tenant["api_key"]
+        "api_key": current_tenant["api_key"],
+        "webhook_url": current_tenant.get("webhook_url", "")
     }
 
 @router.post("/rotate_key")
@@ -66,3 +67,11 @@ async def get_stats(current_tenant: dict = Depends(get_current_tenant)):
         "chunks_indexed": chunks,
         "queries_this_month": queries
     }
+
+@router.put("/webhook")
+async def update_webhook(webhook: WebhookUpdate, current_tenant: dict = Depends(get_current_tenant)):
+    await db.tenants.update_one(
+        {"tenant_id": current_tenant["tenant_id"]},
+        {"$set": {"webhook_url": webhook.webhook_url}}
+    )
+    return {"message": "Webhook updated successfully", "webhook_url": webhook.webhook_url}

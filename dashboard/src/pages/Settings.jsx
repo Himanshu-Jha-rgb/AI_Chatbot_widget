@@ -3,6 +3,8 @@ import { API_BASE_URL, apiUrl, handleUnauthorized } from '../api';
 
 const Settings = () => {
     const [me, setMe] = useState(null);
+    const [webhookUrl, setWebhookUrl] = useState('');
+    const [saving, setSaving] = useState(false);
 
     useEffect(() => {
         fetchMe();
@@ -15,7 +17,9 @@ const Settings = () => {
         });
         if (handleUnauthorized(res)) return;
         if (res.ok) {
-            setMe(await res.json());
+            const data = await res.json();
+            setMe(data);
+            if (data.webhook_url) setWebhookUrl(data.webhook_url);
         }
     };
 
@@ -32,6 +36,26 @@ const Settings = () => {
             const data = await res.json();
             setMe({ ...me, api_key: data.api_key });
         }
+    };
+
+    const updateWebhook = async () => {
+        setSaving(true);
+        const token = localStorage.getItem('token');
+        const res = await fetch(apiUrl('/tenants/webhook'), {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ webhook_url: webhookUrl })
+        });
+        if (handleUnauthorized(res)) return;
+        if (res.ok) {
+            alert("Webhook saved successfully");
+        } else {
+            alert("Failed to save webhook");
+        }
+        setSaving(false);
     };
 
     if (!me) return <div>Loading...</div>;
@@ -70,6 +94,23 @@ const Settings = () => {
                 <h3>Domain</h3>
                 <p>Your registered domain: <strong>{me.domain}</strong></p>
                 <p style={{ color: '#666', fontSize: '14px' }}>Only requests originating from this domain will be accepted by your API key.</p>
+            </div>
+
+            <div className="card">
+                <h3>Lead Form Webhook (Make.com / Zapier)</h3>
+                <p>Paste your Make.com or Zapier webhook URL here. We will POST lead data here when an enquiry form is submitted.</p>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                    <input 
+                        type="url"
+                        value={webhookUrl}
+                        onChange={e => setWebhookUrl(e.target.value)}
+                        placeholder="https://hook.us1.make.com/..."
+                        style={{ flex: 1, padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
+                    />
+                    <button className="btn" onClick={updateWebhook} disabled={saving}>
+                        {saving ? 'Saving...' : 'Save Webhook'}
+                    </button>
+                </div>
             </div>
         </div>
     );
