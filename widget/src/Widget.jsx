@@ -64,17 +64,25 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
         const { name, email, phone } = formData;
         if (!name.trim() || !email.trim()) return;
 
-        // Get session_id from cookie or generate one
+        // Get session_id from cookie
         const getSessionId = () => {
             const match = document.cookie.match(/(?:^|;\s*)chat_session_id=([^;]*)/);
             return match ? decodeURIComponent(match[1]) : '';
         };
+
+        // Collect conversation context: messages leading up to the form
+        // (up to 6 messages = ~3 turns of conversation)
+        const contextMessages = messages.slice(Math.max(0, msgIndex - 5), msgIndex + 1);
+        const contextText = contextMessages
+            .map(m => `${m.role === 'user' ? 'Visitor' : 'Bot'}: ${m.content}`)
+            .join('\n');
 
         try {
             await submitEnquiry({
                 name: name.trim(),
                 email: email.trim(),
                 phone: phone.trim(),
+                message: contextText,
                 session_id: getSessionId(),
             }, apiKey, apiBaseUrl);
 

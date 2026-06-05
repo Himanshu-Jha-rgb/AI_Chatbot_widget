@@ -41,7 +41,8 @@ const Leads = () => {
                                 <th style={{ padding: '10px 12px' }}>Name</th>
                                 <th style={{ padding: '10px 12px' }}>Email</th>
                                 <th style={{ padding: '10px 12px' }}>Phone</th>
-                                <th style={{ padding: '10px 12px' }}>Date</th>
+                                <th style={{ padding: '10px 12px' }}>Message</th>
+                                <th style={{ padding: '10px 12px' }}>Date/Time</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -52,8 +53,17 @@ const Leads = () => {
                                     <td style={{ padding: '10px 12px', color: lead.phone ? 'inherit' : '#aaa' }}>
                                         {lead.phone || '—'}
                                     </td>
-                                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap', color: '#666' }}>
-                                        {new Date(lead.created_at).toLocaleDateString()}
+                                    <td style={{ padding: '10px 12px', maxWidth: '300px', whiteSpace: 'normal', wordBreak: 'break-word', color: lead.message ? '#333' : '#aaa' }}>
+                                        {lead.message || '—'}
+                                    </td>
+                                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap', color: '#666', fontSize: '13px' }}>
+                                        {new Date(lead.created_at).toLocaleString('en-IN', {
+                                            day: '2-digit',
+                                            month: '2-digit',
+                                            year: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                        })}
                                     </td>
                                 </tr>
                             ))}

@@ -326,6 +326,35 @@ flowchart LR
 - The hybrid search (3 vector + 2 BM25) retrieves the most relevant chunks regardless of which source type they came from.
 - Sources can be deleted from the dashboard, which removes all associated chunks, parents, and pages.
 
+## Lead Generation (Enquiry Form)
+
+When a website visitor asks about pricing, demo, purchasing, or wants to be contacted, GPT-4o detects the intent and appends `[ENQUIRY_FORM]` to its response. The backend strips the marker and returns `show_enquiry_form: true`. The widget renders an inline form (Name, Email, Phone).
+
+### Flow
+
+```
+Visitor: "How much does this cost?"
+  → GPT-4o detects lead intent, appends [ENQUIRY_FORM]
+  → Backend strips marker, returns show_enquiry_form: true
+  → Widget shows answer + inline form
+  → Visitor fills form → POST /leads → saved to MongoDB
+  → gpt-4o-mini summarizes conversation context into 1-2 sentences
+  → Dashboard "Leads" page lists all submissions
+```
+
+### Key Details
+- **Intent detection**: Done by GPT-4o in the system prompt, not keyword matching. Works across greeting, RAG, and no-results paths.
+- **Conversation summarization**: On form submit, `gpt-4o-mini` summarizes the last 3 turns of conversation into a concise description of what the lead was interested in. Raw context is also preserved (`raw_context` field).
+- **No LLM call for irrelevant queries**: "Who is Virat Kohli?" gets classified as `OUT_OF_SCOPE` by the query rewriter and returns immediately — no GPT-4o call, no token waste.
+- **Dashboard**: New "Leads" nav item with a table showing Name, Email, Phone, Date, and the summarized message.
+
+### Guardrails
+
+Two layers prevent the chatbot from answering irrelevant questions:
+
+1. **Pre-search (gpt-4o-mini)**: The query rewriter classifies input as `GREETING`, `OUT_OF_SCOPE`, or searchable. Out-of-scope queries return immediately with "I'm here to answer questions about {domain}."
+2. **Hardened system prompt**: The RAG prompt instructs GPT — "If the context does not contain information relevant to the user's question, say you don't have that information."
+
 ## Rate Limiting & Abuse Protection
 
 Three layers of rate limiting protect the chat endpoint:
