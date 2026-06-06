@@ -36,7 +36,8 @@ const Settings = () => {
 
     if (!me) return <div>Loading...</div>;
 
-    const snippet = `<script src="${API_BASE_URL}/static/widget.js" data-api-key="${me.api_key}"></script>`;
+    const widgetUrl = window.location.origin;
+    const snippet = `<script src="${widgetUrl}/static/widget.js" data-api-key="${me.api_key}"></script>`;
 
     return (
         <div>
