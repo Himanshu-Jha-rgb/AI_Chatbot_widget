@@ -126,7 +126,7 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
     # If no relevant content found and it's not a greeting, don't let the model hallucinate
     if needs_search and not chunks:
         messages.append({"role": "user", "content": req.query})
-        no_context_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. You do not have any information to answer the user's question, so do not make up content and do not answer unrelated questions. However, if the user is asking about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]. Otherwise, politely say you don't have that information."""
+        no_context_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. You do not have any information to answer the user's question, so do not make up content and do not answer unrelated questions. Respond in the same language the user wrote in. However, if the user is asking about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]. Otherwise, politely say you don't have that information."""
         api_messages = [{"role": "system", "content": no_context_prompt}] + messages[-MAX_HISTORY:]
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
@@ -171,11 +171,12 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
             seen_sources.add(source_key)
 
     if not needs_search:
-        system_prompt = f"You are a representative of {domain}. Respond conversationally to the user using 'we' and 'our', never referring to yourself as a third party. Do not answer questions unrelated to {domain}. If the user asks about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]."
+        system_prompt = f"You are a representative of {domain}. Respond conversationally to the user using 'we' and 'our', never referring to yourself as a third party. Do not answer questions unrelated to {domain}. Respond in the same language the user wrote in. If the user asks about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]."
     else:
         system_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. Answer only from the provided context. If the context does not contain information relevant to the user's question, say "I don't have information about that" — do not answer unrelated questions or make up content.
 The user is currently on page: {req.current_url} titled {req.current_page_title}.
 Context: {context_text}
+Respond in the same language the user wrote in.
 If the user asks about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]."""
 
     messages.append({"role": "user", "content": req.query})
@@ -225,18 +226,20 @@ def _format_context_chunk(chunk: dict) -> str:
 
 
 # Simple in-memory cache for query rewrites (cleared on server restart)
-_query_rewrite_cache: dict[str, tuple[str, bool]] = {}
+_query_rewrite_cache: dict[str, tuple[str, bool, bool]] = {}
 
 _QUERY_REWRITE_SYSTEM_PROMPT = (
     "You are a query classifier for a company website chatbot. "
+    "All website content is in English. "
     "Classify the user's input and respond in this exact format:\n\n"
     "If it's a greeting, thankyou, small talk, or chitchat → respond: GREETING\n"
     "If the user is asking about something completely unrelated to the company, "
     "its products, services, or the website content — like famous people, weather, "
     "general knowledge, jokes, external topics → respond: OUT_OF_SCOPE\n"
-    "Otherwise → rewrite the user's question into a concise search query that would match "
-    "relevant website content. Extract the core nouns and key concepts. "
-    "Respond with ONLY the rewritten query — no preamble, no explanation, no quotes."
+    "Otherwise → first translate the user's question to English (if not already in English), "
+    "then rewrite it into a concise English search query that would match relevant website content. "
+    "Extract the core nouns and key concepts in English. "
+    "Respond with ONLY the rewritten English query — no preamble, no explanation, no quotes."
 )
 
 
@@ -283,4 +286,4 @@ async def _rewrite_search_query(query: str) -> tuple[str, bool, bool]:
         return result
     except Exception:
         # If the LLM call fails, fall back to the original query and treat as searchable
-        return q, True
+        return q, True, False
