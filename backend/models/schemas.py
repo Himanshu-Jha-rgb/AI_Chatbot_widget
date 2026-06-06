@@ -6,6 +6,7 @@ class TenantRegister(BaseModel):
     domain: str
     password: str
     plan: Optional[str] = "free"
+    theme: Optional[str] = "default"
 
 class TenantLogin(BaseModel):
     domain: str

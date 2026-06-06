@@ -22,6 +22,21 @@ export const chat = async (query, current_url, current_page_title, apiKey, apiBa
     return response.json();
 };
 
+export const getWidgetConfig = async (apiKey, apiBaseUrl = DEFAULT_API_BASE_URL) => {
+    const response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}/widget/config`, {
+        method: "GET",
+        headers: {
+            "Authorization": `Bearer ${apiKey}`
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error("Failed to fetch widget config");
+    }
+
+    return response.json();
+};
+
 export const submitEnquiry = async (data, apiKey, apiBaseUrl = DEFAULT_API_BASE_URL) => {
     const response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}/leads`, {
         method: "POST",

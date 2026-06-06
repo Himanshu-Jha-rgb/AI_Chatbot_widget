@@ -11,6 +11,12 @@ from datetime import datetime, timezone
 
 router = APIRouter(tags=["chat"])
 
+@router.get("/widget/config")
+async def get_widget_config(current_tenant: dict = Depends(verify_api_key)):
+    return {
+        "theme": current_tenant.get("theme", "default")
+    }
+
 # Max messages to send to GPT-4o (2 per turn = 10 turns of conversation)
 MAX_HISTORY = 20
 MAX_QUERY_LENGTH = 500

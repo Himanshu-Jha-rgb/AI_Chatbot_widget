@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { chat, submitEnquiry } from './api';
+import { chat, submitEnquiry, getWidgetConfig } from './api';
 import ReactMarkdown from 'react-markdown';
 
 export const Widget = ({ apiKey, apiBaseUrl }) => {
@@ -8,7 +8,37 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [formData, setFormData] = useState({ name: '', email: '', phone: '' });
+    const [themeName, setThemeName] = useState('default');
     const messagesEndRef = useRef(null);
+
+    const themes = {
+        default: {
+            headerBg: '#0070f3',
+            primary: '#0070f3',
+            headerText: '#fff'
+        },
+        nialabs: {
+            headerBg: '#0f203a',
+            primary: '#0d6efd',
+            headerText: '#fff'
+        }
+    };
+
+    const currentTheme = themes[themeName] || themes.default;
+
+    useEffect(() => {
+        const fetchConfig = async () => {
+            try {
+                const config = await getWidgetConfig(apiKey, apiBaseUrl);
+                if (config && config.theme) {
+                    setThemeName(config.theme);
+                }
+            } catch (err) {
+                console.error("Failed to fetch widget config", err);
+            }
+        };
+        fetchConfig();
+    }, [apiKey, apiBaseUrl]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -108,9 +138,9 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
                     overflow: 'hidden',
                     border: '1px solid #eaeaea'
                 }}>
-                    <div style={{ padding: '16px', backgroundColor: '#0070f3', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ padding: '16px', backgroundColor: currentTheme.headerBg, color: currentTheme.headerText, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>AI Assistant</h3>
-                        <button onClick={() => setIsOpen(false)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '20px' }}>&times;</button>
+                        <button onClick={() => setIsOpen(false)} style={{ background: 'none', border: 'none', color: currentTheme.headerText, cursor: 'pointer', fontSize: '20px' }}>&times;</button>
                     </div>
                     
                     <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', backgroundColor: '#fafafa' }}>
@@ -122,7 +152,7 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
                                 <div style={{
                                     padding: '10px 14px',
                                     borderRadius: '12px',
-                                    backgroundColor: m.role === 'user' ? '#0070f3' : '#fff',
+                                    backgroundColor: m.role === 'user' ? currentTheme.primary : '#fff',
                                     color: m.role === 'user' ? '#fff' : '#333',
                                     border: m.role === 'user' ? 'none' : '1px solid #eaeaea',
                                     boxShadow: m.role === 'user' ? 'none' : '0 2px 5px rgba(0,0,0,0.02)',
@@ -137,7 +167,7 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
                                             components={{
                                                 a: ({ href, children }) => (
                                                     <a href={href} target="_blank" rel="noopener noreferrer"
-                                                       style={{ color: '#0070f3', textDecoration: 'underline' }}>
+                                                       style={{ color: currentTheme.primary, textDecoration: 'underline' }}>
                                                         {children}
                                                     </a>
                                                 ),
@@ -168,7 +198,7 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
                                             const label = s.section_title || s.title || `Source ${idx + 1}`;
                                             const fullTitle = s.section_path || label;
                                             return (
-                                                <a key={idx} href={s.url} title={fullTitle} style={{ color: '#0070f3', marginRight: '8px' }}>
+                                                <a key={idx} href={s.url} title={fullTitle} style={{ color: currentTheme.primary, marginRight: '8px' }}>
                                                     [{idx + 1}] {label}
                                                 </a>
                                             );
@@ -202,7 +232,7 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
                                         <button
                                             onClick={() => handleEnquirySubmit(i)}
                                             disabled={!formData.name.trim() || !formData.email.trim()}
-                                            style={{ width: '100%', padding: '8px', borderRadius: '8px', border: 'none', backgroundColor: '#0070f3', color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '13px', opacity: formData.name.trim() && formData.email.trim() ? 1 : 0.6 }}
+                                            style={{ width: '100%', padding: '8px', borderRadius: '8px', border: 'none', backgroundColor: currentTheme.primary, color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: '13px', opacity: formData.name.trim() && formData.email.trim() ? 1 : 0.6 }}
                                         >
                                             Submit
                                         </button>
@@ -235,7 +265,7 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
                         <button 
                             onClick={handleSend}
                             disabled={isLoading}
-                            style={{ padding: '10px 16px', borderRadius: '20px', border: 'none', backgroundColor: '#0070f3', color: '#fff', cursor: 'pointer', fontWeight: 600 }}
+                            style={{ padding: '10px 16px', borderRadius: '20px', border: 'none', backgroundColor: currentTheme.primary, color: '#fff', cursor: 'pointer', fontWeight: 600 }}
                         >
                             Send
                         </button>
@@ -248,10 +278,10 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
                         width: '60px', 
                         height: '60px', 
                         borderRadius: '50%', 
-                        backgroundColor: '#0070f3', 
+                        backgroundColor: currentTheme.primary, 
                         color: '#fff', 
                         border: 'none', 
-                        boxShadow: '0 4px 12px rgba(0,112,243,0.4)',
+                        boxShadow: `0 4px 12px ${currentTheme.primary}66`,
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
