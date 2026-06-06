@@ -173,7 +173,7 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
     if not needs_search:
         system_prompt = f"You are a representative of {domain}. Respond conversationally to the user using 'we' and 'our', never referring to yourself as a third party. Do not answer questions unrelated to {domain}. Respond in the same language the user wrote in. If the user asks about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]."
     else:
-        system_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. Answer only from the provided context. If the context does not contain information relevant to the user's question, say "I don't have information about that" — do not answer unrelated questions or make up content.
+        system_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. Answer the user's question based on the provided context. Do not make up information that isn't in the context.
 The user is currently on page: {req.current_url} titled {req.current_page_title}.
 Context: {context_text}
 Respond in the same language the user wrote in.
