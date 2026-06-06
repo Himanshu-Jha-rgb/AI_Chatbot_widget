@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from routers import tenants, crawl, chat, sources, faqs, text_docs, leads, admin
 from core.config import settings
@@ -58,10 +58,17 @@ os.makedirs("../widget/dist", exist_ok=True)
 os.makedirs("uploads", exist_ok=True)
 app.mount("/static", StaticFiles(directory="../widget/dist"), name="static")
 
-# Mount dashboard SPA — built at ../dashboard/dist/, served at /dashboard/
+# Mount dashboard built assets (JS, CSS, etc.)
 dashboard_dist = os.path.abspath("../dashboard/dist")
 os.makedirs(dashboard_dist, exist_ok=True)
-app.mount("/dashboard", StaticFiles(directory=dashboard_dist, html=True), name="dashboard")
+dashboard_assets = os.path.join(dashboard_dist, "assets")
+if os.path.isdir(dashboard_assets):
+    app.mount("/dashboard/assets", StaticFiles(directory=dashboard_assets), name="dashboard_assets")
+
+# Serve dashboard index.html for all /dashboard/* paths (SPA catch-all)
+@app.get("/dashboard/{full_path:path}")
+async def dashboard_spa(full_path: str):
+    return FileResponse(os.path.join(dashboard_dist, "index.html"))
 
 @app.get("/")
 async def root():
