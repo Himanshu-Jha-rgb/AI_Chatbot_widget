@@ -15,6 +15,10 @@ import { clearSession } from './api';
 
 const Layout = ({ children }) => {
     const navigate = useNavigate();
+    
+    React.useEffect(() => {
+        document.title = "Tenant Dashboard";
+    }, []);
     const handleLogout = () => {
         clearSession();
         navigate('/login');
@@ -47,6 +51,11 @@ const PrivateRoute = ({ children }) => {
 
 const AdminLayout = ({ children }) => {
     const navigate = useNavigate();
+    
+    React.useEffect(() => {
+        document.title = "System Admin Dashboard";
+    }, []);
+
     const handleLogout = () => {
         localStorage.removeItem('adminToken');
         navigate('/admin/login');

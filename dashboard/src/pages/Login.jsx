@@ -10,6 +10,10 @@ const Login = () => {
     const [error, setError] = useState('');
     const navigate = useNavigate();
 
+    React.useEffect(() => {
+        document.title = isRegister ? "Register - Tenant Dashboard" : "Login - Tenant Dashboard";
+    }, [isRegister]);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');

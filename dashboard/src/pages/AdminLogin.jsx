@@ -9,6 +9,10 @@ const AdminLogin = () => {
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
+    React.useEffect(() => {
+        document.title = "System Admin Login";
+    }, []);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
