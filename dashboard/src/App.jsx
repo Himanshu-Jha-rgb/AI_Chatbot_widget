@@ -9,6 +9,8 @@ import PDFUpload from './pages/PDFUpload';
 import FAQs from './pages/FAQs';
 import TextDocs from './pages/TextDocs';
 import Leads from './pages/Leads';
+import AdminTenants from './pages/AdminTenants';
+import AdminLogin from './pages/AdminLogin';
 import { clearSession } from './api';
 
 const Layout = ({ children }) => {
@@ -43,6 +45,34 @@ const PrivateRoute = ({ children }) => {
     return token ? <Layout>{children}</Layout> : <Navigate to="/login" />;
 };
 
+const AdminLayout = ({ children }) => {
+    const navigate = useNavigate();
+    const handleLogout = () => {
+        localStorage.removeItem('adminToken');
+        navigate('/admin/login');
+    };
+
+    return (
+        <div style={{ display: 'flex', minHeight: '100vh' }}>
+            <div style={{ width: '250px', background: '#000', color: '#fff', padding: '2rem', borderRight: '1px solid #333' }}>
+                <h2 style={{ color: '#fff', marginTop: 0 }}>System Admin</h2>
+                <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '2rem' }}>
+                    <Link to="/admin/tenants" style={{ color: '#a855f7', textDecoration: 'none', fontWeight: '500' }}>Tenant Management</Link>
+                    <button onClick={handleLogout} style={{ marginTop: 'auto', background: 'none', border: 'none', color: '#ff4444', textAlign: 'left', cursor: 'pointer', padding: 0 }}>Admin Logout</button>
+                </nav>
+            </div>
+            <div style={{ flex: 1, padding: '2rem', overflowY: 'auto' }}>
+                {children}
+            </div>
+        </div>
+    );
+};
+
+const AdminRoute = ({ children }) => {
+    const token = localStorage.getItem('adminToken');
+    return token ? <AdminLayout>{children}</AdminLayout> : <Navigate to="/admin/login" />;
+};
+
 const App = () => {
     return (
         <BrowserRouter>
@@ -56,6 +86,10 @@ const App = () => {
                 <Route path="/crawl" element={<PrivateRoute><Crawl /></PrivateRoute>} />
                 <Route path="/leads" element={<PrivateRoute><Leads /></PrivateRoute>} />
                 <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
+                
+                {/* Admin Routes */}
+                <Route path="/admin/login" element={<AdminLogin />} />
+                <Route path="/admin/tenants" element={<AdminRoute><AdminTenants /></AdminRoute>} />
                 <Route path="*" element={<Navigate to="/" />} />
             </Routes>
         </BrowserRouter>

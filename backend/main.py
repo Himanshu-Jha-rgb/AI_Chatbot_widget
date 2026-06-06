@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
-from routers import tenants, crawl, chat, sources, faqs, text_docs, leads
+from routers import tenants, crawl, chat, sources, faqs, text_docs, leads, admin
 from core.config import settings
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -50,6 +50,7 @@ app.include_router(sources.router)
 app.include_router(faqs.router)
 app.include_router(text_docs.router)
 app.include_router(leads.router)
+app.include_router(admin.router)
 
 # Mount widget dist directory
 os.makedirs("../widget/dist", exist_ok=True)
