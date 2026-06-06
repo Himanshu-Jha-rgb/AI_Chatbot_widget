@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request, Response
+from fastapi.responses import RedirectResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from routers import tenants, crawl, chat, sources, faqs, text_docs, leads, admin
 from core.config import settings
@@ -57,9 +58,14 @@ os.makedirs("../widget/dist", exist_ok=True)
 os.makedirs("uploads", exist_ok=True)
 app.mount("/static", StaticFiles(directory="../widget/dist"), name="static")
 
+# Mount dashboard SPA — built at ../dashboard/dist/, served at /dashboard/
+dashboard_dist = os.path.abspath("../dashboard/dist")
+os.makedirs(dashboard_dist, exist_ok=True)
+app.mount("/dashboard", StaticFiles(directory=dashboard_dist, html=True), name="dashboard")
+
 @app.get("/")
-def root():
-    return {"message": "API is running. Widget at /static/widget.js"}
+async def root():
+    return RedirectResponse(url="/dashboard/")
 
 @app.on_event("startup")
 async def ensure_lookup_indexes():

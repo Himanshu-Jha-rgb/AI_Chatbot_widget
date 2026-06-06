@@ -84,7 +84,7 @@ const AdminRoute = ({ children }) => {
 
 const App = () => {
     return (
-        <BrowserRouter>
+        <BrowserRouter basename="/dashboard">
             <Routes>
                 <Route path="/login" element={<Login />} />
                 <Route path="/" element={<PrivateRoute><Overview /></PrivateRoute>} />
