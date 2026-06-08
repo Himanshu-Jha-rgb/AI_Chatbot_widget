@@ -231,16 +231,17 @@ _query_rewrite_cache: dict[str, tuple[str, bool, bool]] = {}
 _QUERY_REWRITE_SYSTEM_PROMPT = (
     "You are a query classifier for a company website chatbot. "
     "All website content is in English. "
-    "Classify the user's input and respond in this exact format:\n\n"
-    "If it's a greeting, thankyou, small talk, or chitchat → respond: GREETING\n"
-    "If the user is asking about something completely unrelated to the company, "
-    "its products, services, or the website content — like famous people, weather, "
-    "general knowledge, jokes, external topics → respond: OUT_OF_SCOPE\n"
-    "Vague queries that could be about the company are NOT out of scope.\n"
-    "Otherwise → first translate the user's question to English (if not already in English), "
-    "then rewrite it into a concise English search query that would match relevant website content. "
-    "Extract the core nouns and key concepts in English. "
-    "Respond with ONLY the rewritten English query — no preamble, no explanation, no quotes."
+    "Classify the user's input:\n\n"
+    "GREETING → greetings, thanks, small talk, chit-chat. "
+    "Examples: 'hi', 'hello', 'thanks', 'how are you', 'good morning', 'namaste', 'bye'\n\n"
+    "OUT_OF_SCOPE → ONLY if the query is 100% clearly about something that has nothing to do with "
+    "this company — like famous people, weather, cricket, general knowledge, jokes, external topics. "
+    "Do NOT classify as OUT_OF_SCOPE if the query could be about the company's products, "
+    "services, or website content — even if it's vague like 'mujhe kuchh janana h' (I want to know something), "
+    "'tell me something', 'kya hai', 'batao', or 'jaankari'.\n\n"
+    "OTHERWISE → first translate to English (if not already), "
+    "then rewrite into a concise English search query. "
+    "Respond with ONLY the rewritten query — no preamble, no explanation, no quotes."
 )
 
 
