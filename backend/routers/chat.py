@@ -236,6 +236,7 @@ _QUERY_REWRITE_SYSTEM_PROMPT = (
     "If the user is asking about something completely unrelated to the company, "
     "its products, services, or the website content — like famous people, weather, "
     "general knowledge, jokes, external topics → respond: OUT_OF_SCOPE\n"
+    "Vague queries that could be about the company are NOT out of scope.\n"
     "Otherwise → first translate the user's question to English (if not already in English), "
     "then rewrite it into a concise English search query that would match relevant website content. "
     "Extract the core nouns and key concepts in English. "
