@@ -10,14 +10,18 @@ const Crawl = () => {
     const [crawlError, setCrawlError] = useState('');
 
     const fetchHistory = async () => {
-        const token = localStorage.getItem('token');
-        const res = await fetch(apiUrl('/dashboard/crawl/history'), {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (handleUnauthorized(res)) return;
-        if (res.ok) {
-            const data = await res.json();
-            setHistory(Array.isArray(data) ? data : []);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(apiUrl('/dashboard/crawl/history'), {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (handleUnauthorized(res)) return;
+            if (res.ok) {
+                const data = await res.json();
+                setHistory(Array.isArray(data) ? data : []);
+            }
+        } catch (err) {
+            console.error('Failed to fetch crawl history:', err);
         }
     };
 
@@ -48,6 +52,7 @@ const Crawl = () => {
             setJobId(data.job_id);
             setJobStatus(null);
             setSeedUrl('');
+            fetchHistory();
         } catch (err) {
             setCrawlError('Network error — is the server reachable?');
             console.error('Crawl error:', err);
