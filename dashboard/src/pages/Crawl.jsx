@@ -136,9 +136,11 @@ const Crawl = () => {
                 </div>
             )}
 
-            {history.length > 0 && (
-                <div className="card">
-                    <h3>Crawl History</h3>
+            <div className="card">
+                <h3>Crawl History</h3>
+                {history.length === 0 ? (
+                    <p style={{ color: '#888', fontSize: '14px' }}>No past crawls</p>
+                ) : (
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                         <thead>
                             <tr style={{ borderBottom: '2px solid #eaeaea', textAlign: 'left' }}>
@@ -173,8 +175,8 @@ const Crawl = () => {
                             ))}
                         </tbody>
                     </table>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 };
