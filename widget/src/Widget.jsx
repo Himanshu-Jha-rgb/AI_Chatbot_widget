@@ -104,13 +104,15 @@ function useIsMobile(breakpoint = 768) {
     );
     useEffect(() => {
         const mq = window.matchMedia(`(max-width: ${breakpoint}px)`);
-        const handler = () => setIsMobile(window.innerWidth <= breakpoint);
-        mq.addEventListener('change', handler);
-        window.addEventListener('resize', handler);
-        handler();
+        const check = () => setIsMobile(window.innerWidth <= breakpoint);
+        mq.addEventListener('change', check);
+        window.addEventListener('resize', check);
+        check();
+        const id = setInterval(check, 300);
         return () => {
-            mq.removeEventListener('change', handler);
-            window.removeEventListener('resize', handler);
+            mq.removeEventListener('change', check);
+            window.removeEventListener('resize', check);
+            clearInterval(id);
         };
     }, [breakpoint]);
     return isMobile;
