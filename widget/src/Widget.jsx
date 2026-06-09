@@ -47,8 +47,6 @@ function useHostTheme() {
             const rgb = parseRgb(bgRaw);
             if (rgb) {
                 isDark = luminance(rgb[0], rgb[1], rgb[2]) < 0.4;
-            } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                isDark = true;
             }
 
             setTheme({ accent, font, isDark });
@@ -106,7 +104,7 @@ function TypingIndicator({ accent, isDark }) {
             <div style={{
                 padding: '12px 18px',
                 borderRadius: '18px 18px 18px 4px',
-                background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                background: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.04)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '5px',
@@ -117,7 +115,7 @@ function TypingIndicator({ accent, isDark }) {
                         key={i}
                         className="cw-typing-dot"
                         style={{
-                            backgroundColor: isDark ? 'rgba(255,255,255,0.6)' : accent,
+                            backgroundColor: isDark ? 'rgba(255,255,255,0.8)' : accent,
                             animationDelay: `${i * 150}ms`,
                         }}
                     />
@@ -156,24 +154,24 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
     }), [accent, font]);
 
     const palette = useMemo(() => ({
-        containerBg: isDark ? 'rgba(17,17,27,0.88)' : 'rgba(255,255,255,0.88)',
-        containerBorder: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+        containerBg: isDark ? 'rgba(18,18,24,0.95)' : 'rgba(255,255,255,0.88)',
+        containerBorder: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)',
         headerBg: isDark
-            ? `linear-gradient(135deg, ${accent}CC, ${accent}88)`
+            ? `linear-gradient(135deg, ${accent}, ${accent}BB)`
             : `linear-gradient(135deg, ${accent}, ${accent}DD)`,
         headerText: '#fff',
-        msgAreaBg: isDark ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.02)',
+        msgAreaBg: isDark ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.02)',
         userBubbleBg: accent,
         userBubbleText: '#fff',
-        assistantBubbleBg: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
-        assistantBubbleText: isDark ? 'rgba(255,255,255,0.88)' : '#1a1a2e',
-        assistantBubbleBorder: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
-        inputBg: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
-        inputBorder: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
-        inputText: isDark ? 'rgba(255,255,255,0.9)' : '#1a1a2e',
-        inputPlaceholder: isDark ? 'rgba(255,255,255,0.35)' : '#999',
-        subtleText: isDark ? 'rgba(255,255,255,0.45)' : '#888',
-        divider: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+        assistantBubbleBg: isDark ? 'rgba(255,255,255,0.12)' : '#fff',
+        assistantBubbleText: isDark ? '#f0f0f0' : '#1a1a2e',
+        assistantBubbleBorder: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)',
+        inputBg: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.03)',
+        inputBorder: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)',
+        inputText: isDark ? '#e8e8e8' : '#1a1a2e',
+        inputPlaceholder: isDark ? 'rgba(255,255,255,0.5)' : '#999',
+        subtleText: isDark ? 'rgba(255,255,255,0.6)' : '#888',
+        divider: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)',
         fabShadow: `${accent}55`,
     }), [accent, isDark]);
 
@@ -753,7 +751,7 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
                     <div style={{
                         padding: '12px 14px',
                         borderTop: `1px solid ${palette.divider}`,
-                        backgroundColor: isDark ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.6)',
+                        backgroundColor: isDark ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.6)',
                         backdropFilter: 'blur(8px)',
                         WebkitBackdropFilter: 'blur(8px)',
                         display: 'flex',
