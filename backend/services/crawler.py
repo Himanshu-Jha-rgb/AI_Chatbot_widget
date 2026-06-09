@@ -95,8 +95,13 @@ async def _crawl_with_firecrawl(seed_url: str) -> list[dict]:
         crawl_response.raise_for_status()
         firecrawl_job_id = crawl_response.json()["id"]
 
-        while True:
+        # Timeout after 8 minutes — Render free tier kills processes after ~15 min idle
+        max_wait = 480
+        elapsed = 0
+
+        while elapsed < max_wait:
             await asyncio.sleep(5)
+            elapsed += 5
             status_response = await client.get(
                 f"https://api.firecrawl.dev/v1/crawl/{firecrawl_job_id}",
                 headers=headers
@@ -108,6 +113,8 @@ async def _crawl_with_firecrawl(seed_url: str) -> list[dict]:
                 return status_data.get("data", [])
             if status_data["status"] == "failed":
                 raise RuntimeError("Firecrawl job failed")
+
+        raise RuntimeError(f"Firecrawl crawl timed out after {max_wait}s — job may still be running on Firecrawl")
 
 async def _index_page(
     tenant_id: str,

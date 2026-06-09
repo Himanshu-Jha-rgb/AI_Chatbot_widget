@@ -75,6 +75,21 @@ async def root():
     return RedirectResponse(url="/dashboard/")
 
 @app.on_event("startup")
+async def cleanup_stale_jobs():
+    """Mark any 'running' crawl jobs as failed — they died when Render killed the process."""
+    from datetime import datetime, timezone
+    result = await db.crawl_jobs.update_many(
+        {"status": "running"},
+        {"$set": {
+            "status": "failed",
+            "error": "Server restarted — crawl task was interrupted",
+            "finished_at": datetime.now(timezone.utc),
+        }}
+    )
+    if result.modified_count:
+        print(f"Cleaned up {result.modified_count} stale crawl job(s)")
+
+@app.on_event("startup")
 async def ensure_lookup_indexes():
     await db.parents.create_index([("tenant_id", 1), ("parent_id", 1)])
     await db.parents.create_index([("tenant_id", 1), ("source_id", 1)])
