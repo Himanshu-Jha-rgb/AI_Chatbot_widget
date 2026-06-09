@@ -45,7 +45,7 @@ function useHostTheme() {
             let isDark = false;
             const bgRaw = bodyStyles.backgroundColor || docStyles.backgroundColor;
             const rgb = parseRgb(bgRaw);
-            if (rgb) {
+            if (rgb && bgRaw !== 'rgba(0, 0, 0, 0)' && bgRaw !== 'transparent') {
                 isDark = luminance(rgb[0], rgb[1], rgb[2]) < 0.4;
             }
 
@@ -421,9 +421,9 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
                                             style={{
                                                 padding: '10px 14px',
                                                 borderRadius: '12px',
-                                                border: `1px solid ${accent}30`,
-                                                backgroundColor: isDark ? `${accent}10` : `${accent}08`,
-                                                color: accent,
+                                                border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : `${accent}30`}`,
+                                                backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : `${accent}08`,
+                                                color: isDark ? '#fff' : accent,
                                                 cursor: 'pointer',
                                                 fontSize: '13px',
                                                 textAlign: 'left',
@@ -432,12 +432,12 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
                                                 fontWeight: 500,
                                             }}
                                             onMouseEnter={e => {
-                                                e.currentTarget.style.backgroundColor = `${accent}18`;
-                                                e.currentTarget.style.borderColor = `${accent}50`;
+                                                e.currentTarget.style.backgroundColor = isDark ? 'rgba(255,255,255,0.14)' : `${accent}18`;
+                                                e.currentTarget.style.borderColor = isDark ? 'rgba(255,255,255,0.3)' : `${accent}50`;
                                             }}
                                             onMouseLeave={e => {
-                                                e.currentTarget.style.backgroundColor = isDark ? `${accent}10` : `${accent}08`;
-                                                e.currentTarget.style.borderColor = `${accent}30`;
+                                                e.currentTarget.style.backgroundColor = isDark ? 'rgba(255,255,255,0.08)' : `${accent}08`;
+                                                e.currentTarget.style.borderColor = isDark ? 'rgba(255,255,255,0.2)' : `${accent}30`;
                                             }}
                                         >
                                             {q}
@@ -567,12 +567,12 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
                                                     href={s.url}
                                                     title={fullTitle}
                                                     style={{
-                                                        color: accent,
-                                                        opacity: 0.8,
+                                                        color: isDark ? '#fff' : accent,
+                                                        opacity: 0.75,
                                                         transition: 'opacity 0.15s',
                                                     }}
                                                     onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                                                    onMouseLeave={e => e.currentTarget.style.opacity = '0.8'}
+                                                    onMouseLeave={e => e.currentTarget.style.opacity = '0.75'}
                                                 >
                                                     [{idx + 1}] {label}
                                                 </a>
