@@ -82,6 +82,10 @@ function useStyleInjection() {
                 from { opacity: 0; transform: translateY(16px); }
                 to { opacity: 1; transform: translateY(0); }
             }
+            @keyframes cwSlideUpMobile {
+                from { transform: translateY(100%); }
+                to { transform: translateY(0); }
+            }
             .cw-typing-dot {
                 width: 7px;
                 height: 7px;
@@ -92,6 +96,20 @@ function useStyleInjection() {
         `;
         document.head.appendChild(style);
     }, []);
+}
+
+function useIsMobile(breakpoint = 768) {
+    const [isMobile, setIsMobile] = useState(
+        typeof window !== 'undefined' ? window.innerWidth <= breakpoint : false
+    );
+    useEffect(() => {
+        const mq = window.matchMedia(`(max-width: ${breakpoint}px)`);
+        const handler = (e) => setIsMobile(e.matches);
+        mq.addEventListener('change', handler);
+        setIsMobile(mq.matches);
+        return () => mq.removeEventListener('change', handler);
+    }, [breakpoint]);
+    return isMobile;
 }
 
 function TypingIndicator({ accent, isDark }) {
@@ -137,6 +155,7 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
 
     useStyleInjection();
     const hostTheme = useHostTheme();
+    const isMobile = useIsMobile();
 
     const themes = {
         default: { headerBg: '#0070f3', primary: '#0070f3', headerText: '#fff' },
@@ -295,8 +314,8 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
             className="cw-widget-root"
             style={{
                 position: 'fixed',
-                bottom: '24px',
-                right: '24px',
+                bottom: isMobile ? 0 : '24px',
+                right: isMobile ? 0 : '24px',
                 zIndex: 2147483647,
                 fontFamily: font,
                 ...widgetVars,
@@ -304,20 +323,27 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
         >
             {isOpen ? (
                 <div style={{
-                    width: '380px',
-                    height: '560px',
+                    width: isMobile ? '100vw' : '380px',
+                    height: isMobile ? '100dvh' : '560px',
+                    position: isMobile ? 'fixed' : 'relative',
+                    bottom: isMobile ? 0 : undefined,
+                    right: isMobile ? 0 : undefined,
                     display: 'flex',
                     flexDirection: 'column',
-                    borderRadius: '24px',
+                    borderRadius: isMobile ? 0 : '24px',
                     overflow: 'hidden',
                     background: palette.containerBg,
-                    backdropFilter: 'blur(16px) saturate(180%)',
-                    WebkitBackdropFilter: 'blur(16px) saturate(180%)',
-                    border: `1px solid ${palette.containerBorder}`,
-                    boxShadow: isDark
-                        ? '0 12px 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04)'
-                        : '0 12px 40px rgba(0,0,0,0.12), 0 0 0 1px rgba(255,255,255,0.6)',
-                    animation: 'cwFadeIn 0.3s cubic-bezier(0.16,1,0.3,1)',
+                    backdropFilter: isMobile ? 'none' : 'blur(16px) saturate(180%)',
+                    WebkitBackdropFilter: isMobile ? 'none' : 'blur(16px) saturate(180%)',
+                    border: isMobile ? 'none' : `1px solid ${palette.containerBorder}`,
+                    boxShadow: isMobile
+                        ? 'none'
+                        : isDark
+                            ? '0 12px 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04)'
+                            : '0 12px 40px rgba(0,0,0,0.12), 0 0 0 1px rgba(255,255,255,0.6)',
+                    animation: isMobile
+                        ? 'cwSlideUpMobile 0.3s cubic-bezier(0.16,1,0.3,1)'
+                        : 'cwFadeIn 0.3s cubic-bezier(0.16,1,0.3,1)',
                     fontFamily: font,
                 }}>
 
