@@ -6,7 +6,6 @@ const Login = () => {
     const [isRegister, setIsRegister] = useState(false);
     const [domain, setDomain] = useState('');
     const [password, setPassword] = useState('');
-    const [theme, setTheme] = useState('default');
     const [error, setError] = useState('');
     const navigate = useNavigate();
 
@@ -20,7 +19,7 @@ const Login = () => {
         const endpoint = isRegister ? '/tenants/register' : '/tenants/login';
         
         try {
-            const bodyPayload = isRegister ? { domain, password, theme } : { domain, password };
+            const bodyPayload = isRegister ? { domain, password } : { domain, password };
             const res = await fetch(apiUrl(endpoint), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -51,15 +50,6 @@ const Login = () => {
                         <label>Password</label>
                         <input className="input" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
                     </div>
-                    {isRegister && (
-                        <div>
-                            <label>Widget Theme</label>
-                            <select className="input" value={theme} onChange={e => setTheme(e.target.value)}>
-                                <option value="default">Default Blue</option>
-                                <option value="nialabs">Nialabs (Dark/Vibrant Blue)</option>
-                            </select>
-                        </div>
-                    )}
                     <button type="submit" className="btn" style={{ width: '100%' }}>
                         {isRegister ? 'Sign Up' : 'Sign In'}
                     </button>
