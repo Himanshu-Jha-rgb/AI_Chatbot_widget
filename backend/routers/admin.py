@@ -69,8 +69,13 @@ async def delete_tenant(tenant_id: str, admin: dict = Depends(get_current_admin)
     # Cascade delete tenant's data
     await db.pages.delete_many({"tenant_id": tenant_id})
     await db.chunks.delete_many({"tenant_id": tenant_id})
+    await db.parents.delete_many({"tenant_id": tenant_id})
     await db.conversations.delete_many({"tenant_id": tenant_id})
     await db.sources.delete_many({"tenant_id": tenant_id})
     await db.leads.delete_many({"tenant_id": tenant_id})
+    await db.crawl_jobs.delete_many({"tenant_id": tenant_id})
+    await db.faqs.delete_many({"tenant_id": tenant_id})
+    await db.documents.delete_many({"tenant_id": tenant_id})
+    await db.visitors.delete_many({"tenant_id": tenant_id})
     
     return {"message": "Tenant and associated data deleted successfully"}
