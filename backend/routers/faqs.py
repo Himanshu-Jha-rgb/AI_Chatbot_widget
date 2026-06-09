@@ -142,6 +142,7 @@ async def delete_faq(
 async def _index_all_faqs(tenant_id: str, source_id: str):
     """Background task: index all FAQs as chunks."""
     from services.ingestion import ingest_document
+    from services.suggested import generate_suggested_questions
 
     try:
         # Delete existing chunks for this source
@@ -175,6 +176,10 @@ async def _index_all_faqs(tenant_id: str, source_id: str):
                 "updated_at": datetime.now(timezone.utc),
             }}
         )
+
+        # Auto-generate suggested questions after indexing
+        import asyncio
+        asyncio.create_task(generate_suggested_questions(tenant_id))
     except Exception as e:
         print(f"FAQ indexing failed for {source_id}: {e}")
         await db.sources.update_one(

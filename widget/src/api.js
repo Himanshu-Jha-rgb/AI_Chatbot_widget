@@ -53,3 +53,24 @@ export const submitEnquiry = async (data, apiKey, apiBaseUrl = DEFAULT_API_BASE_
 
     return response.json();
 };
+
+export const submitFeedback = async (messageId, sessionId, rating, apiKey, apiBaseUrl = DEFAULT_API_BASE_URL) => {
+    const response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}/feedback`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            message_id: messageId,
+            session_id: sessionId,
+            rating
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error("Feedback submission failed");
+    }
+
+    return response.json();
+};

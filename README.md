@@ -63,8 +63,8 @@ sequenceDiagram
     end
     
     API->>MongoDB: Save to conversation history
-    API-->>Widget: { answer, sources }
-    Widget-->>User: Display answer
+    API-->>Widget: { answer, sources, message_id }
+    Widget-->>User: Display answer + like/dislike buttons
 ```
 
 ### 3. Crawling & Indexing Flow
@@ -102,6 +102,8 @@ sequenceDiagram
     end
     
     Crawler->>DB: Mark job as done
+    Crawler->>API: Auto-generate suggested questions
+    Note over API: GPT-4o-mini generates 6 questions<br/>from indexed content
 ```
 
 ### 4. Hybrid Search Merge Strategy
@@ -130,7 +132,7 @@ flowchart TD
     
     CTX --> SP["System Prompt:<br/>'Answer only from context'"]
     SP --> LLM[gpt-4o]
-    LLM --> ANS[Final Answer + Sources]
+    LLM --> ANS[Final Answer + Sources + message_id]
 ```
 
 ## Prerequisites
@@ -260,6 +262,65 @@ npm run dev
 5. Add the copied script tag to your site's HTML file.
 6. Interact with the chat widget!
 
+## 5. Testing the Widget Locally
+
+Before deploying to a client's site, you can test the widget on a simulated website using the local dev servers.
+
+### Quick Start
+
+**Terminal 1 — Start the backend:**
+```bash
+cd backend
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+**Terminal 2 — Start the widget dev server:**
+```bash
+cd widget
+npm run dev
+```
+
+**Terminal 3 — Open the test page:**
+```bash
+# macOS
+open test-embed.html
+
+# Linux
+xdg-open test-embed.html
+
+# Windows
+start test-embed.html
+```
+
+The test page (`test-embed.html`) simulates a real client website with:
+- The widget loaded via a `<script>` tag (same production embed flow)
+- CSS variables (`--primary`, `--accent`) to test automatic theme inheritance
+- A **Toggle Dark Mode** button to verify dark/light mode detection
+- Sample content cards explaining what to test
+
+### What to Test
+- Click the chat bubble to open the widget — verify the glassmorphism animation
+- Send a message — verify the animated typing indicator (3 bouncing dots)
+- Check that the widget picks up the page's `--primary` (#6366F1) as its accent color
+- Toggle dark mode — verify the widget adapts its palette automatically
+- Test on narrow viewports — the widget should stay fixed at bottom-right
+
+### Testing with a Built Widget (Production Simulation)
+
+To test the production IIFE build instead of the Vite dev server:
+```bash
+cd widget
+npm run build
+```
+Then serve the `dist/` folder and update the `<script>` src in `test-embed.html` to point to the built file:
+```html
+<script
+  src="http://localhost:8080/widget.js"
+  data-api-key="sk_live_..."
+  data-api-base-url="http://localhost:8000"
+></script>
+```
+
 ## Extra Knowledge Sources
 
 Beyond website crawling, the platform supports **four types** of knowledge sources. All sources feed into the same unified vector + BM25 search index per tenant.
@@ -303,6 +364,7 @@ flowchart LR
 - Submitted via `POST /dashboard/crawl` with a seed URL.
 - Background task calls Firecrawl API (up to 200 pages), ingests each page as markdown.
 - Old chunks for re-crawled URLs are automatically cleaned up (dedup by `crawl_id`).
+- After crawl completes, suggested questions are auto-generated from indexed content.
 
 #### PDF Uploads
 - Uploaded via `POST /dashboard/sources/pdf/upload`.
@@ -314,17 +376,106 @@ flowchart LR
 2. Add Q&A pairs via `POST /dashboard/sources/{source_id}/faqs`. Raw pairs stored in the `faqs` collection.
 3. Click **"Index"** to trigger background ingestion — formats each as `Q: ...\nA: ...` and runs the pipeline.
 4. Can re-index to pick up new or updated FAQs (clears existing indexed data first).
+5. After indexing, suggested questions are auto-generated from indexed content.
 
 #### Text Documents
 1. Create a text document source container via `POST /dashboard/sources` (type: `text`).
 2. Add documents (title + body) via `POST /dashboard/sources/{source_id}/docs`.
 3. Click **"Index"** to trigger background ingestion — same pattern as FAQs.
+4. After indexing, suggested questions are auto-generated from indexed content.
 
 ### Search-Time Behavior
 
 - All indexed sources within a tenant are searched **together** as a single pool — there is no filtering by source type or source ID at query time.
 - The hybrid search (3 vector + 2 BM25) retrieves the most relevant chunks regardless of which source type they came from.
 - Sources can be deleted from the dashboard, which removes all associated chunks, parents, and pages.
+
+## Crawl History
+
+The dashboard provides a complete crawl history with timestamps for every crawl job.
+
+### Features
+- **Full history table** showing: Seed URL, Status, Pages Found, Chunks Created, Started At, Finished At
+- **Real-time status** for the currently running job (polls every 5 seconds)
+- **Color-coded status badges**: green for done, red for failed, yellow for running
+- **Timestamps** for when each crawl started and finished
+
+### API Endpoint
+```
+GET /dashboard/crawl/history
+Authorization: Bearer <jwt_token>
+```
+
+Returns an array of crawl job objects sorted by `started_at` descending.
+
+## Like/Dislike Feedback
+
+Each AI response includes thumbs-up/thumbs-down buttons for visitor feedback. This data is stored for analytics.
+
+### How It Works
+1. Every chat response includes a unique `message_id`
+2. Visitor clicks thumbs-up or thumbs-down on any bot message
+3. Feedback is stored in the `message_feedback` collection
+4. Dashboard shows feedback analytics (total likes, dislikes, like ratio)
+
+### API Endpoint
+```
+POST /feedback
+Authorization: Bearer <api_key>
+Content-Type: application/json
+
+{
+  "message_id": "uuid",
+  "session_id": "uuid",
+  "rating": "like" | "dislike"
+}
+```
+
+### Analytics Endpoint
+```
+GET /dashboard/analytics/feedback
+Authorization: Bearer <jwt_token>
+```
+
+Returns:
+```json
+{
+  "total": 150,
+  "likes": 120,
+  "dislikes": 30,
+  "like_ratio": 80.0
+}
+```
+
+## Suggested Questions (Empty Chat)
+
+When a visitor opens the chat widget with no messages yet, suggested questions appear as clickable chips. There are two sources for these questions:
+
+### Manual Questions (Dashboard)
+- Tenant manually adds questions via the Settings page
+- Stored in `tenant.suggested_questions_manual`
+- **Takes priority** — if manual questions exist, they are shown instead of auto-generated ones
+
+### Auto-Generated Questions (LLM)
+- Generated automatically after crawl or FAQ/text-doc indexing completes
+- Stored in `tenant.suggested_questions_auto`
+- Uses GPT-4o-mini to analyze indexed content and generate 6 relevant questions
+- Runs as a background task (never blocks the main flow)
+
+### Widget Behavior
+```
+if manual questions exist:
+    show manual questions
+else:
+    show auto-generated questions
+else:
+    show "Ask me anything about this site!"
+```
+
+### Dashboard UI (Settings Page)
+- View auto-generated questions (grayed out, read-only)
+- Add/edit/remove manual questions
+- Save changes via `PUT /tenants/suggested-questions`
 
 ## Lead Generation (Enquiry Form)
 
@@ -400,6 +551,7 @@ If search returns zero results for a non-greeting query, the system returns *"I 
 | Embeddings | OpenAI `text-embedding-3-small` |
 | Chat LLM | OpenAI `gpt-4o` |
 | Query Rewriting | OpenAI `gpt-4o-mini` |
+| Suggested Questions | OpenAI `gpt-4o-mini` |
 | Crawling | Firecrawl API |
 | Auth | JWT (python-jose) + API keys (bcrypt) |
 | Frontend (Dashboard) | React 18, Vite |
@@ -413,14 +565,23 @@ If search returns zero results for a non-greeting query, the system returns *"I 
 
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| POST | `/chat` | API Key | Chat with the widget |
+| POST | `/chat` | API Key | Chat with the widget (returns `message_id`) |
+| POST | `/feedback` | API Key | Submit like/dislike feedback for a message |
+| GET | `/widget/config` | API Key | Get widget config (theme + suggested questions) |
 | POST | `/tenants/register` | None | Register a new tenant |
 | POST | `/tenants/login` | None | Login |
+| GET | `/tenants/me` | JWT | Get tenant info + suggested questions |
 | GET | `/tenants/stats` | JWT | Tenant stats |
 | POST | `/tenants/rotate-key` | JWT | Rotate API key |
-| POST | `/crawl` | JWT | Start a crawl job |
-| GET | `/crawl/{job_id}` | JWT | Check crawl status |
-| DELETE | `/index` | JWT | Delete indexed data |
+| PUT | `/tenants/suggested-questions` | JWT | Save manual suggested questions |
+| GET | `/dashboard/analytics/feedback` | JWT | Get feedback analytics |
+| POST | `/crawl` | API Key | Start a crawl job |
+| GET | `/crawl/{job_id}` | API Key | Check crawl status |
+| DELETE | `/index` | API Key | Delete indexed data |
+| POST | `/dashboard/crawl` | JWT | Start a crawl (dashboard) |
+| GET | `/dashboard/crawl/{job_id}` | JWT | Check crawl status (dashboard) |
+| GET | `/dashboard/crawl/history` | JWT | Get crawl history with timestamps |
+| DELETE | `/dashboard/index` | JWT | Delete indexed data (dashboard) |
 | GET | `/dashboard/sources` | JWT | List all knowledge sources |
 | POST | `/dashboard/sources` | JWT | Create a source container |
 | GET | `/dashboard/sources/{source_id}` | JWT | Get source details + chunk count |
@@ -436,6 +597,20 @@ If search returns zero results for a non-greeting query, the system returns *"I 
 | PUT | `/dashboard/sources/{source_id}/docs/{doc_id}` | JWT | Update a text document |
 | DELETE | `/dashboard/sources/{source_id}/docs/{doc_id}` | JWT | Delete a text document + its chunks |
 | POST | `/dashboard/sources/{source_id}/docs/index` | JWT | Index all text documents for search |
-| POST | `/dashboard/crawl` | JWT | Start a crawl (dashboard) |
-| GET | `/dashboard/crawl/{job_id}` | JWT | Check crawl status (dashboard) |
-| DELETE | `/dashboard/index` | JWT | Delete indexed data (dashboard) |
+
+## Database Collections
+
+| Collection | Purpose |
+|---|---|
+| `tenants` | Tenant accounts, API keys, suggested questions config |
+| `pages` | Raw crawled page content |
+| `parents` | Parent sections from markdown heading splits |
+| `chunks` | Child chunks with embeddings (searchable unit) |
+| `sources` | Knowledge source metadata |
+| `crawl_jobs` | Crawl job status and history |
+| `conversations` | Chat conversation history |
+| `visitors` | Visitor tracking (IP, page views, messages) |
+| `faqs` | FAQ Q&A pairs |
+| `documents` | Text document content |
+| `leads` | Enquiry form submissions |
+| `message_feedback` | Like/dislike feedback on AI responses |

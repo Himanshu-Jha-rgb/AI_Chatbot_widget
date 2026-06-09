@@ -16,8 +16,10 @@ async def start_crawl(req: CrawlRequest, background_tasks: BackgroundTasks, curr
         "status": "queued",
         "pages_found": 0,
         "chunks_created": 0,
+        "embedding_errors": 0,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
+        "error": None,
     })
     
     background_tasks.add_task(crawl_task, current_tenant["tenant_id"], req.seed_url, job_id)
@@ -46,8 +48,10 @@ async def dashboard_start_crawl(req: CrawlRequest, background_tasks: BackgroundT
         "status": "queued",
         "pages_found": 0,
         "chunks_created": 0,
+        "embedding_errors": 0,
         "started_at": None,
-        "finished_at": None
+        "finished_at": None,
+        "error": None,
     })
     background_tasks.add_task(crawl_task, current_tenant["tenant_id"], req.seed_url, job_id)
     return {"job_id": job_id}
@@ -56,6 +60,14 @@ async def dashboard_start_crawl(req: CrawlRequest, background_tasks: BackgroundT
 async def dashboard_get_crawl_status(job_id: str, current_tenant: dict = Depends(get_current_tenant)):
     job = await db.crawl_jobs.find_one({"job_id": job_id, "tenant_id": current_tenant["tenant_id"]}, {"_id": 0})
     return job
+
+@router.get("/dashboard/crawl/history")
+async def dashboard_crawl_history(current_tenant: dict = Depends(get_current_tenant)):
+    jobs = await db.crawl_jobs.find(
+        {"tenant_id": current_tenant["tenant_id"]},
+        {"_id": 0}
+    ).sort("started_at", -1).to_list(length=100)
+    return jobs
 
 @router.delete("/dashboard/index")
 async def dashboard_delete_index(current_tenant: dict = Depends(get_current_tenant)):

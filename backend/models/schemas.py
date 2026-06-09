@@ -35,6 +35,7 @@ class Source(BaseModel):
     section_path: Optional[str] = None
 
 class ChatResponse(BaseModel):
+    message_id: str
     answer: str
     sources: List[Source]
     show_enquiry_form: bool = False
@@ -112,3 +113,15 @@ class DashboardLead(BaseModel):
     session_id: str
     source_url: Optional[str] = None
     created_at: datetime
+
+# --- Feedback ---
+
+class FeedbackRequest(BaseModel):
+    message_id: str
+    session_id: str
+    rating: str = Field(..., pattern=r"^(like|dislike)$")
+
+# --- Suggested Questions ---
+
+class SuggestedQuestionsUpdate(BaseModel):
+    questions: List[str]

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Request, Response, HTTPException
-from models.schemas import ChatRequest, ChatResponse, Source
+from models.schemas import ChatRequest, ChatResponse, Source, FeedbackRequest
 from core.auth import verify_api_key, db, limiter
 from core.config import settings
 from services.vector_search import search_chunks
@@ -13,8 +13,12 @@ router = APIRouter(tags=["chat"])
 
 @router.get("/widget/config")
 async def get_widget_config(current_tenant: dict = Depends(verify_api_key)):
+    manual = current_tenant.get("suggested_questions_manual", [])
+    auto = current_tenant.get("suggested_questions_auto", [])
+    suggested = manual if manual else auto
     return {
-        "theme": current_tenant.get("theme", "default")
+        "theme": current_tenant.get("theme", "default"),
+        "suggested_questions": suggested,
     }
 
 # Max messages to send to GPT-4o (2 per turn = 10 turns of conversation)
@@ -46,6 +50,7 @@ def _check_rate_limit(key: str, limits: dict, max_reqs: int) -> bool:
 async def chat(request: Request, req: ChatRequest, fastapi_response: Response, current_tenant: dict = Depends(verify_api_key)):
     tenant_id = current_tenant["tenant_id"]
     domain = current_tenant["domain"]
+    message_id = str(uuid.uuid4())
 
     # --- Max query length ---
     if len(req.query) > MAX_QUERY_LENGTH:
@@ -112,7 +117,7 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
 
     if is_out_of_scope:
         answer = f"I'm here to answer questions about {domain}. I don't have information about that."
-        return ChatResponse(answer=answer, sources=[])
+        return ChatResponse(message_id=message_id, answer=answer, sources=[])
 
     if needs_search:
         chunks = await search_chunks(tenant_id, search_query)
@@ -147,7 +152,7 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
             {"$addToSet": {"conversation_ids": session_id},
              "$inc": {"total_messages": 1}}
         )
-        return ChatResponse(answer=answer, sources=[], show_enquiry_form=show_form)
+        return ChatResponse(message_id=message_id, answer=answer, sources=[], show_enquiry_form=show_form)
 
     context_text = "\n\n".join([
         _format_context_chunk(c)
@@ -211,7 +216,28 @@ If the user asks about pricing, demo, purchasing, or wants to be contacted, offe
          "$inc": {"total_messages": 1}}
     )
 
-    return ChatResponse(answer=answer, sources=sources, show_enquiry_form=show_form)
+    return ChatResponse(message_id=message_id, answer=answer, sources=sources, show_enquiry_form=show_form)
+
+
+@router.post("/feedback")
+async def submit_feedback(req: FeedbackRequest, current_tenant: dict = Depends(verify_api_key)):
+    await db.message_feedback.update_one(
+        {
+            "tenant_id": current_tenant["tenant_id"],
+            "session_id": req.session_id,
+            "message_id": req.message_id,
+        },
+        {"$set": {
+            "tenant_id": current_tenant["tenant_id"],
+            "session_id": req.session_id,
+            "message_id": req.message_id,
+            "rating": req.rating,
+            "created_at": datetime.now(timezone.utc),
+        }},
+        upsert=True,
+    )
+    return {"status": "ok"}
+
 
 def _format_context_chunk(chunk: dict) -> str:
     title = chunk.get("title") or "Relevant Page"
