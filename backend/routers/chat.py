@@ -229,7 +229,7 @@ def _format_context_chunk(chunk: dict) -> str:
 _query_rewrite_cache: dict[str, tuple[str, bool, bool]] = {}
 
 _QUERY_REWRITE_SYSTEM_PROMPT = (
-    "You are a query router for a company website chatbot (NiaLabs - biometric attendance & access control solutions). "
+    "You are a query router for a company website chatbot. "
     "Your job is to classify the user's message into exactly one of three outputs:\n\n"
 
     "1. Reply GREETING\n"
