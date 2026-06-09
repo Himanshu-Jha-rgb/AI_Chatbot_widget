@@ -6,6 +6,8 @@ const Crawl = () => {
     const [jobId, setJobId] = useState(null);
     const [jobStatus, setJobStatus] = useState(null);
     const [history, setHistory] = useState([]);
+    const [isStarting, setIsStarting] = useState(false);
+    const [crawlError, setCrawlError] = useState('');
 
     const fetchHistory = async () => {
         const token = localStorage.getItem('token');
@@ -24,21 +26,33 @@ const Crawl = () => {
     }, []);
 
     const handleCrawl = async () => {
-        if (!seedUrl) return;
+        if (!seedUrl || isStarting) return;
+        setIsStarting(true);
+        setCrawlError('');
         const token = localStorage.getItem('token');
-        const res = await fetch(apiUrl('/dashboard/crawl'), {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ seed_url: seedUrl })
-        });
-        if (handleUnauthorized(res)) return;
-        if (res.ok) {
+        try {
+            const res = await fetch(apiUrl('/dashboard/crawl'), {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ seed_url: seedUrl })
+            });
+            if (handleUnauthorized(res)) return;
             const data = await res.json();
+            if (!res.ok) {
+                setCrawlError(data.detail || 'Failed to start crawl');
+                return;
+            }
             setJobId(data.job_id);
+            setJobStatus(null);
             setSeedUrl('');
+        } catch (err) {
+            setCrawlError('Network error — is the server reachable?');
+            console.error('Crawl error:', err);
+        } finally {
+            setIsStarting(false);
         }
     };
 
@@ -77,16 +91,26 @@ const Crawl = () => {
             <h1>Crawl Jobs</h1>
             <div className="card">
                 <h3>Start a new crawl</h3>
-                <div style={{ display: 'flex', gap: '1rem' }}>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     <input 
                         className="input" 
-                        style={{ marginBottom: 0 }}
+                        style={{ marginBottom: 0, flex: 1 }}
                         placeholder="https://example.com" 
                         value={seedUrl} 
-                        onChange={e => setSeedUrl(e.target.value)} 
+                        onChange={e => { setSeedUrl(e.target.value); setCrawlError(''); }} 
                     />
-                    <button className="btn" onClick={handleCrawl}>Start Crawl</button>
+                    <button 
+                        className="btn" 
+                        onClick={handleCrawl}
+                        disabled={isStarting || !seedUrl.trim()}
+                        style={{ opacity: isStarting || !seedUrl.trim() ? 0.6 : 1, cursor: isStarting || !seedUrl.trim() ? 'not-allowed' : 'pointer' }}
+                    >
+                        {isStarting ? 'Starting...' : 'Start Crawl'}
+                    </button>
                 </div>
+                {crawlError && (
+                    <p style={{ color: '#dc3545', marginTop: '0.75rem', fontSize: '14px' }}>{crawlError}</p>
+                )}
             </div>
 
             {jobStatus && (
