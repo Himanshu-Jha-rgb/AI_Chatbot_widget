@@ -58,11 +58,6 @@ async def dashboard_start_crawl(req: CrawlRequest, background_tasks: BackgroundT
     background_tasks.add_task(crawl_task, current_tenant["tenant_id"], seed_url, job_id)
     return {"job_id": job_id}
 
-@router.get("/dashboard/crawl/{job_id}")
-async def dashboard_get_crawl_status(job_id: str, current_tenant: dict = Depends(get_current_tenant)):
-    job = await db.crawl_jobs.find_one({"job_id": job_id, "tenant_id": current_tenant["tenant_id"]}, {"_id": 0})
-    return job
-
 @router.get("/dashboard/crawl/history")
 async def dashboard_crawl_history(current_tenant: dict = Depends(get_current_tenant)):
     jobs = await db.crawl_jobs.find(
@@ -70,6 +65,11 @@ async def dashboard_crawl_history(current_tenant: dict = Depends(get_current_ten
         {"_id": 0}
     ).sort("started_at", -1).to_list(length=100)
     return jobs
+
+@router.get("/dashboard/crawl/{job_id}")
+async def dashboard_get_crawl_status(job_id: str, current_tenant: dict = Depends(get_current_tenant)):
+    job = await db.crawl_jobs.find_one({"job_id": job_id, "tenant_id": current_tenant["tenant_id"]}, {"_id": 0})
+    return job
 
 @router.delete("/dashboard/index")
 async def dashboard_delete_index(current_tenant: dict = Depends(get_current_tenant)):
