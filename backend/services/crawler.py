@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import httpx
 from core.auth import db
 from services.ingestion import ingest_document
+from services.suggested_questions import update_tenant_suggested_questions
 from core.config import settings
 
 MAX_PAGES = 200
@@ -63,6 +64,16 @@ async def crawl_task(tenant_id: str, seed_url: str, job_id: str, source_id: str 
                 "finished_at": datetime.now(timezone.utc)
             }}
         )
+
+        # Regenerate suggested questions after successful crawl
+        if pages_found > 0:
+            tenant = await db.tenants.find_one({"tenant_id": tenant_id})
+            if tenant:
+                await update_tenant_suggested_questions(
+                    tenant_id,
+                    tenant.get("domain", ""),
+                    tenant.get("industry")
+                )
 
     except Exception as e:
         print(f"Crawl job {job_id} failed: {e}")

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 
 from core.auth import db, get_current_tenant
 from models.schemas import FAQCreate, FAQUpdate
+from services.suggested_questions import update_tenant_suggested_questions
 
 router = APIRouter(prefix="/dashboard/sources/{source_id}/faqs", tags=["faqs"])
 
@@ -175,6 +176,15 @@ async def _index_all_faqs(tenant_id: str, source_id: str):
                 "updated_at": datetime.now(timezone.utc),
             }}
         )
+
+        # Regenerate suggested questions after successful indexing
+        tenant = await db.tenants.find_one({"tenant_id": tenant_id})
+        if tenant:
+            await update_tenant_suggested_questions(
+                tenant_id,
+                tenant.get("domain", ""),
+                tenant.get("industry")
+            )
     except Exception as e:
         print(f"FAQ indexing failed for {source_id}: {e}")
         await db.sources.update_one(

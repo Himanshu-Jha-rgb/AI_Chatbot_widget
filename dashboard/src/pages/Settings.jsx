@@ -72,6 +72,14 @@ const Settings = () => {
                 <p>Your registered domain: <strong>{me.domain}</strong></p>
                 <p style={{ color: '#666', fontSize: '14px' }}>Only requests originating from this domain will be accepted by your API key.</p>
             </div>
+
+            {me.industry && (
+                <div className="card">
+                    <h3>Industry</h3>
+                    <p>Your selected industry: <strong>{me.industry}</strong></p>
+                    <p style={{ color: '#666', fontSize: '14px' }}>Your widget is themed for the {me.industry} industry.</p>
+                </div>
+            )}
         </div>
     );
 };

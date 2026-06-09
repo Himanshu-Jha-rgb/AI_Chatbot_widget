@@ -9,6 +9,9 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [formData, setFormData] = useState({ name: '', email: '', phone: '' });
     const [themeName, setThemeName] = useState('default');
+    const [industry, setIndustry] = useState(null);
+    const [domain, setDomain] = useState('');
+    const [suggestedQuestions, setSuggestedQuestions] = useState([]);
     const messagesEndRef = useRef(null);
 
     const themes = {
@@ -21,17 +24,72 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
             headerBg: '#0f203a',
             primary: '#0d6efd',
             headerText: '#fff'
+        },
+        ecommerce: {
+            headerBg: '#ff6b35',
+            primary: '#ff6b35',
+            headerText: '#fff'
+        },
+        saas: {
+            headerBg: '#6366f1',
+            primary: '#6366f1',
+            headerText: '#fff'
+        },
+        healthcare: {
+            headerBg: '#059669',
+            primary: '#059669',
+            headerText: '#fff'
+        },
+        education: {
+            headerBg: '#2563eb',
+            primary: '#2563eb',
+            headerText: '#fff'
+        },
+        'real-estate': {
+            headerBg: '#7c3aed',
+            primary: '#7c3aed',
+            headerText: '#fff'
+        },
+        finance: {
+            headerBg: '#0891b2',
+            primary: '#0891b2',
+            headerText: '#fff'
+        },
+        legal: {
+            headerBg: '#1e293b',
+            primary: '#1e293b',
+            headerText: '#fff'
+        },
+        'travel-hospitality': {
+            headerBg: '#ea580c',
+            primary: '#ea580c',
+            headerText: '#fff'
         }
     };
 
-    const currentTheme = themes[themeName] || themes.default;
+    const getTheme = () => {
+        if (themeName && themes[themeName]) {
+            return themes[themeName];
+        }
+        if (industry && themes[industry]) {
+            return themes[industry];
+        }
+        return themes.default;
+    };
+
+    const currentTheme = getTheme();
 
     useEffect(() => {
         const fetchConfig = async () => {
             try {
                 const config = await getWidgetConfig(apiKey, apiBaseUrl);
-                if (config && config.theme) {
-                    setThemeName(config.theme);
+                if (config) {
+                    if (config.theme) setThemeName(config.theme);
+                    if (config.industry) setIndustry(config.industry);
+                    if (config.domain) setDomain(config.domain);
+                    if (config.suggested_questions && Array.isArray(config.suggested_questions)) {
+                        setSuggestedQuestions(config.suggested_questions);
+                    }
                 }
             } catch (err) {
                 console.error("Failed to fetch widget config", err);
@@ -139,13 +197,53 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
                     border: '1px solid #eaeaea'
                 }}>
                     <div style={{ padding: '16px', backgroundColor: currentTheme.headerBg, color: currentTheme.headerText, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>AI Assistant</h3>
+                        <div>
+                            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>AI Assistant</h3>
+                            {domain && <p style={{ margin: '2px 0 0 0', fontSize: '11px', opacity: 0.8 }}>{domain}</p>}
+                        </div>
                         <button onClick={() => setIsOpen(false)} style={{ background: 'none', border: 'none', color: currentTheme.headerText, cursor: 'pointer', fontSize: '20px' }}>&times;</button>
                     </div>
                     
                     <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', backgroundColor: '#fafafa' }}>
                         {messages.length === 0 && (
-                            <p style={{ textAlign: 'center', color: '#888', marginTop: 'auto', marginBottom: 'auto' }}>Ask me anything about this site!</p>
+                            <div style={{ marginTop: 'auto', marginBottom: 'auto', textAlign: 'center' }}>
+                                <p style={{ color: '#888', marginBottom: suggestedQuestions.length > 0 ? '12px' : '0' }}>
+                                    Ask me anything about this site!
+                                </p>
+                                {suggestedQuestions.length > 0 && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        {suggestedQuestions.map((question, idx) => (
+                                            <button
+                                                key={idx}
+                                                onClick={() => {
+                                                    setInput(question);
+                                                    handleSend();
+                                                }}
+                                                style={{
+                                                    padding: '10px 12px',
+                                                    borderRadius: '8px',
+                                                    border: `1px solid ${currentTheme.primary}40`,
+                                                    backgroundColor: `${currentTheme.primary}10`,
+                                                    color: currentTheme.primary,
+                                                    cursor: 'pointer',
+                                                    fontSize: '13px',
+                                                    textAlign: 'left',
+                                                    transition: 'all 0.2s',
+                                                    wordBreak: 'break-word'
+                                                }}
+                                                onMouseOver={(e) => {
+                                                    e.target.style.backgroundColor = `${currentTheme.primary}20`;
+                                                }}
+                                                onMouseOut={(e) => {
+                                                    e.target.style.backgroundColor = `${currentTheme.primary}10`;
+                                                }}
+                                            >
+                                                {question}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         )}
                         {messages.map((m, i) => (
                             <div key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>

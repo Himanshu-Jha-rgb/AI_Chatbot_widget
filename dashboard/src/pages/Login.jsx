@@ -7,6 +7,7 @@ const Login = () => {
     const [domain, setDomain] = useState('');
     const [password, setPassword] = useState('');
     const [theme, setTheme] = useState('default');
+    const [industry, setIndustry] = useState('');
     const [error, setError] = useState('');
     const navigate = useNavigate();
 
@@ -20,7 +21,7 @@ const Login = () => {
         const endpoint = isRegister ? '/tenants/register' : '/tenants/login';
         
         try {
-            const bodyPayload = isRegister ? { domain, password, theme } : { domain, password };
+            const bodyPayload = isRegister ? { domain, password, theme, industry } : { domain, password };
             const res = await fetch(apiUrl(endpoint), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -52,13 +53,37 @@ const Login = () => {
                         <input className="input" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
                     </div>
                     {isRegister && (
-                        <div>
-                            <label>Widget Theme</label>
-                            <select className="input" value={theme} onChange={e => setTheme(e.target.value)}>
-                                <option value="default">Default Blue</option>
-                                <option value="nialabs">Nialabs (Dark/Vibrant Blue)</option>
-                            </select>
-                        </div>
+                        <>
+                            <div>
+                                <label>Industry</label>
+                                <select className="input" value={industry} onChange={e => setIndustry(e.target.value)} required>
+                                    <option value="">Select your industry</option>
+                                    <option value="ecommerce">E-commerce</option>
+                                    <option value="saas">SaaS</option>
+                                    <option value="healthcare">Healthcare</option>
+                                    <option value="education">Education</option>
+                                    <option value="real-estate">Real Estate</option>
+                                    <option value="finance">Finance</option>
+                                    <option value="legal">Legal</option>
+                                    <option value="travel-hospitality">Travel & Hospitality</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label>Widget Theme</label>
+                                <select className="input" value={theme} onChange={e => setTheme(e.target.value)}>
+                                    <option value="default">Default Blue</option>
+                                    <option value="nialabs">Nialabs (Dark/Vibrant Blue)</option>
+                                    <option value="ecommerce">E-commerce (Orange)</option>
+                                    <option value="saas">SaaS (Indigo)</option>
+                                    <option value="healthcare">Healthcare (Green)</option>
+                                    <option value="education">Education (Blue)</option>
+                                    <option value="real-estate">Real Estate (Purple)</option>
+                                    <option value="finance">Finance (Cyan)</option>
+                                    <option value="legal">Legal (Dark Slate)</option>
+                                    <option value="travel-hospitality">Travel & Hospitality (Orange)</option>
+                                </select>
+                            </div>
+                        </>
                     )}
                     <button type="submit" className="btn" style={{ width: '100%' }}>
                         {isRegister ? 'Sign Up' : 'Sign In'}

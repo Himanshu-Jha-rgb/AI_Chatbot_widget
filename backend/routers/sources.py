@@ -9,6 +9,7 @@ from core.auth import db, get_current_tenant
 from models.schemas import SourceCreate, SourceResponse
 from services.pdf_parser import extract_text_from_pdf
 from services.ingestion import ingest_document
+from services.suggested_questions import update_tenant_suggested_questions
 
 router = APIRouter(prefix="/dashboard/sources", tags=["sources"])
 
@@ -147,6 +148,15 @@ async def _index_pdf_background(tenant_id: str, source_id: str, file_path: str, 
                 "updated_at": datetime.now(timezone.utc),
             }}
         )
+
+        # Regenerate suggested questions after successful indexing
+        tenant = await db.tenants.find_one({"tenant_id": tenant_id})
+        if tenant:
+            await update_tenant_suggested_questions(
+                tenant_id,
+                tenant.get("domain", ""),
+                tenant.get("industry")
+            )
     except Exception as e:
         print(f"PDF indexing failed for {source_id}: {e}")
         await db.sources.update_one(

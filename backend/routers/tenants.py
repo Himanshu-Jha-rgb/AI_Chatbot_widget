@@ -22,6 +22,7 @@ async def register(tenant: TenantRegister):
         "domain": tenant.domain,
         "plan": tenant.plan,
         "theme": tenant.theme,
+        "industry": tenant.industry,
         "password_hash": get_password_hash(tenant.password),
         "created_at": datetime.now(timezone.utc)
     })
@@ -45,6 +46,7 @@ async def get_me(current_tenant: dict = Depends(get_current_tenant)):
         "domain": current_tenant["domain"],
         "plan": current_tenant.get("plan", "free"),
         "theme": current_tenant.get("theme", "default"),
+        "industry": current_tenant.get("industry"),
         "api_key": current_tenant["api_key"]
     }
 

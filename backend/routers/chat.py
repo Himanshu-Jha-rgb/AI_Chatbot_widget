@@ -4,6 +4,7 @@ from core.auth import verify_api_key, db, limiter
 from core.config import settings
 from services.vector_search import search_chunks
 from services.embedder import openai_client
+from services.industry_prompts import get_industry_prompt
 import uuid
 import time
 from collections import defaultdict, deque
@@ -14,7 +15,10 @@ router = APIRouter(tags=["chat"])
 @router.get("/widget/config")
 async def get_widget_config(current_tenant: dict = Depends(verify_api_key)):
     return {
-        "theme": current_tenant.get("theme", "default")
+        "theme": current_tenant.get("theme", "default"),
+        "industry": current_tenant.get("industry"),
+        "domain": current_tenant.get("domain"),
+        "suggested_questions": current_tenant.get("suggested_questions", [])
     }
 
 # Max messages to send to GPT-4o (2 per turn = 10 turns of conversation)
@@ -111,7 +115,26 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
     search_query, needs_search, is_out_of_scope = await _rewrite_search_query(req.query)
 
     if is_out_of_scope:
-        answer = f"I'm here to answer questions about {domain}. I don't have information about that."
+        industry = current_tenant.get("industry")
+        answer = get_industry_prompt(industry, "no_context_prompt", domain).replace(
+            "You don't have specific information about that, ",
+            "I'm here to answer questions about " + domain + ". "
+        ).replace(
+            "I don't have specific information about that in my knowledge base, ",
+            "I'm here to answer questions about " + domain + ". "
+        ).replace(
+            "I don't have that specific information, ",
+            "I'm here to answer questions about " + domain + ". "
+        ).replace(
+            "I don't have that specific listing information, ",
+            "I'm here to answer questions about " + domain + ". "
+        ).replace(
+            "I don't have that specific information available, ",
+            "I'm here to answer questions about " + domain + ". "
+        ).replace(
+            "You do not have any information to answer the user's question, ",
+            "I'm here to answer questions about " + domain + ". "
+        )
         return ChatResponse(answer=answer, sources=[])
 
     if needs_search:
@@ -126,7 +149,8 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
     # If no relevant content found and it's not a greeting, don't let the model hallucinate
     if needs_search and not chunks:
         messages.append({"role": "user", "content": req.query})
-        no_context_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. You do not have any information to answer the user's question, so do not make up content and do not answer unrelated questions. Respond in the same language the user wrote in. However, if the user is asking about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]. Otherwise, politely say you don't have that information."""
+        industry = current_tenant.get("industry")
+        no_context_prompt = get_industry_prompt(industry, "no_context_prompt", domain)
         api_messages = [{"role": "system", "content": no_context_prompt}] + messages[-MAX_HISTORY:]
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
@@ -171,13 +195,14 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
             seen_sources.add(source_key)
 
     if not needs_search:
-        system_prompt = f"You are a representative of {domain}. Respond conversationally to the user using 'we' and 'our', never referring to yourself as a third party. Do not answer questions unrelated to {domain}. Respond in the same language the user wrote in. If the user asks about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]."
+        industry = current_tenant.get("industry")
+        system_prompt = get_industry_prompt(industry, "greeting_prompt", domain)
     else:
-        system_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. Answer the user's question based on the provided context. Do not make up information that isn't in the context.
+        industry = current_tenant.get("industry")
+        base_prompt = get_industry_prompt(industry, "system_prompt", domain)
+        system_prompt = f"""{base_prompt}
 The user is currently on page: {req.current_url} titled {req.current_page_title}.
-Context: {context_text}
-Respond in the same language the user wrote in.
-If the user asks about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]."""
+Context: {context_text}"""
 
     messages.append({"role": "user", "content": req.query})
 
@@ -229,7 +254,7 @@ def _format_context_chunk(chunk: dict) -> str:
 _query_rewrite_cache: dict[str, tuple[str, bool, bool]] = {}
 
 _QUERY_REWRITE_SYSTEM_PROMPT = (
-    "You are a query router for a company website chatbot (NiaLabs - biometric attendance & access control solutions). "
+    "You are a query router for a company website chatbot. "
     "Your job is to classify the user's message into exactly one of three outputs:\n\n"
 
     "1. Reply GREETING\n"
