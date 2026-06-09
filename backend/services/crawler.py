@@ -10,6 +10,14 @@ from core.config import settings
 
 MAX_PAGES = 200
 
+def normalize_url(url: str) -> str:
+    url = url.strip().lower()
+    if url.startswith("http://"):
+        url = url[7:]
+    elif url.startswith("https://"):
+        url = url[8:]
+    return url.rstrip("/")
+
 async def crawl_task(tenant_id: str, seed_url: str, job_id: str, source_id: str = ""):
     await db.crawl_jobs.update_one(
         {"job_id": job_id},
@@ -25,12 +33,22 @@ async def crawl_task(tenant_id: str, seed_url: str, job_id: str, source_id: str 
         if not settings.FIRECRAWL_API_KEY:
             raise ValueError("FIRECRAWL_API_KEY is not configured")
 
+        # Purge all old data for this site before re-crawling
+        old_jobs = await db.crawl_jobs.find(
+            {"tenant_id": tenant_id, "job_id": {"$ne": job_id}},
+            {"job_id": 1, "seed_url": 1}
+        ).to_list(length=100)
+        old_crawl_ids = [j["job_id"] for j in old_jobs if normalize_url(j.get("seed_url", "")) == seed_url]
+        if old_crawl_ids:
+            await db.chunks.delete_many({"tenant_id": tenant_id, "crawl_id": {"$in": old_crawl_ids}})
+            await db.parents.delete_many({"tenant_id": tenant_id, "crawl_id": {"$in": old_crawl_ids}})
+            await db.pages.delete_many({"tenant_id": tenant_id, "crawl_id": {"$in": old_crawl_ids}})
+
         pages = await _crawl_with_firecrawl(seed_url)
 
         pages_found = 0
         chunks_created = 0
         embedding_errors = 0
-        indexed_urls = []
 
         for page in pages:
             result = await _index_page(tenant_id, job_id, page, source_id)
@@ -41,7 +59,6 @@ async def crawl_task(tenant_id: str, seed_url: str, job_id: str, source_id: str 
             embedding_errors += result["embedding_errors"]
             if result["indexed"]:
                 pages_found += 1
-                indexed_urls.append(result["url"])
 
             await db.crawl_jobs.update_one(
                 {"job_id": job_id},
@@ -51,9 +68,6 @@ async def crawl_task(tenant_id: str, seed_url: str, job_id: str, source_id: str 
                     "embedding_errors": embedding_errors,
                 }}
             )
-
-        if indexed_urls:
-            await _delete_previous_versions(tenant_id, job_id, indexed_urls)
 
         await db.crawl_jobs.update_one(
             {"job_id": job_id},
@@ -155,19 +169,4 @@ async def _index_page(
         "embedding_errors": result["embedding_errors"] or 1,
     }
 
-async def _delete_previous_versions(tenant_id: str, crawl_id: str, urls: list[str]) -> None:
-    await db.chunks.delete_many({
-        "tenant_id": tenant_id,
-        "url": {"$in": urls},
-        "crawl_id": {"$ne": crawl_id},
-    })
-    await db.parents.delete_many({
-        "tenant_id": tenant_id,
-        "url": {"$in": urls},
-        "crawl_id": {"$ne": crawl_id},
-    })
-    await db.pages.delete_many({
-        "tenant_id": tenant_id,
-        "url": {"$in": urls},
-        "crawl_id": {"$ne": crawl_id},
-    })
+

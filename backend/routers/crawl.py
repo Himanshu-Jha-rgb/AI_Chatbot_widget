@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, BackgroundTasks
 from models.schemas import CrawlRequest, CrawlJobResponse
 from core.auth import verify_api_key, get_current_tenant, db
-from services.crawler import crawl_task
+from services.crawler import crawl_task, normalize_url
 import uuid
 
 router = APIRouter(tags=["crawl"])
@@ -9,10 +9,11 @@ router = APIRouter(tags=["crawl"])
 @router.post("/crawl", response_model=CrawlJobResponse)
 async def start_crawl(req: CrawlRequest, background_tasks: BackgroundTasks, current_tenant: dict = Depends(verify_api_key)):
     job_id = str(uuid.uuid4())
+    seed_url = normalize_url(req.seed_url)
     await db.crawl_jobs.insert_one({
         "tenant_id": current_tenant["tenant_id"],
         "job_id": job_id,
-        "seed_url": req.seed_url,
+        "seed_url": seed_url,
         "status": "queued",
         "pages_found": 0,
         "chunks_created": 0,
@@ -22,7 +23,7 @@ async def start_crawl(req: CrawlRequest, background_tasks: BackgroundTasks, curr
         "error": None,
     })
     
-    background_tasks.add_task(crawl_task, current_tenant["tenant_id"], req.seed_url, job_id)
+    background_tasks.add_task(crawl_task, current_tenant["tenant_id"], seed_url, job_id)
     return {"job_id": job_id}
 
 @router.get("/crawl/{job_id}")
@@ -41,10 +42,11 @@ async def delete_index(current_tenant: dict = Depends(verify_api_key)):
 @router.post("/dashboard/crawl", response_model=CrawlJobResponse)
 async def dashboard_start_crawl(req: CrawlRequest, background_tasks: BackgroundTasks, current_tenant: dict = Depends(get_current_tenant)):
     job_id = str(uuid.uuid4())
+    seed_url = normalize_url(req.seed_url)
     await db.crawl_jobs.insert_one({
         "tenant_id": current_tenant["tenant_id"],
         "job_id": job_id,
-        "seed_url": req.seed_url,
+        "seed_url": seed_url,
         "status": "queued",
         "pages_found": 0,
         "chunks_created": 0,
@@ -53,7 +55,7 @@ async def dashboard_start_crawl(req: CrawlRequest, background_tasks: BackgroundT
         "finished_at": None,
         "error": None,
     })
-    background_tasks.add_task(crawl_task, current_tenant["tenant_id"], req.seed_url, job_id)
+    background_tasks.add_task(crawl_task, current_tenant["tenant_id"], seed_url, job_id)
     return {"job_id": job_id}
 
 @router.get("/dashboard/crawl/{job_id}")

@@ -36,6 +36,7 @@ Everything runs from one service on Render: FastAPI backend + dashboard + widget
    - `ALLOWED_ORIGINS` — `*` (or your domain if you have one)
    - `COOKIE_SECURE` — `True`
    - `COOKIE_SAMESITE` — `none`
+   - `VITE_API_BASE_URL` — your Render URL (e.g. `https://chatbot-backend-xyz.onrender.com`) — **required for dashboard API calls**
 
 5. Select **Free** instance, click **Create Web Service**.
 
