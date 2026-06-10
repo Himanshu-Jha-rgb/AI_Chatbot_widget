@@ -45,36 +45,18 @@ async def list_knowledge_gaps(
     if status != "all":
         query_filter["status"] = status
 
-    cursor = db.knowledge_gaps.find(query_filter).sort("count", -1)
-    all_gaps = await cursor.to_list(length=1000)
+    all_gaps = await db.knowledge_gaps.find(query_filter).sort("count", -1).to_list(1000)
     gaps = all_gaps[skip:skip + limit]
-
-    faqs = await db.faqs.find({"tenant_id": tenant_id}).to_list(1000)
 
     result = []
     for gap in gaps:
-        gap["gap_id"] = str(gap["_id"])
-        similar_faqs = []
         try:
-            emb = gap.get("embedding")
-            if emb and isinstance(emb, list) and len(emb) > 0 and faqs:
-                gap_emb = np.array(emb)
-                for faq in faqs:
-                    faq_emb = faq.get("embedding")
-                    if faq_emb and isinstance(faq_emb, list) and len(faq_emb) > 0:
-                        cos_sim = float(np.dot(gap_emb, np.array(faq_emb)) / (np.linalg.norm(gap_emb) * np.linalg.norm(np.array(faq_emb))))
-                        if cos_sim > 0.8:
-                            similar_faqs.append({
-                                "faq_id": str(faq["_id"]),
-                                "question": faq["question"],
-                                "answer": faq["answer"],
-                                "similarity": round(cos_sim, 2),
-                            })
-        except Exception:
-            pass
-        gap["similar_faqs"] = sorted(similar_faqs, key=lambda x: x["similarity"], reverse=True)[:3]
-        gap.pop("embedding", None)
-        result.append(gap)
+            gap["gap_id"] = str(gap["_id"])
+            gap.pop("_id", None)
+            gap.pop("embedding", None)
+            result.append(gap)
+        except Exception as e:
+            print(f"[KNOWLEDGE] error processing gap: {e}")
 
     return result
 
