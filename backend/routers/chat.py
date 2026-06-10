@@ -6,6 +6,7 @@ from services.vector_search import search_chunks
 from services.embedder import openai_client
 import uuid
 import time
+import numpy as np
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 
@@ -117,6 +118,7 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
 
     if is_out_of_scope:
         answer = f"I'm here to answer questions about {domain}. I don't have information about that."
+        await _log_knowledge_gap(tenant_id, req.query, req.current_url, "out_of_scope", message_id)
         return ChatResponse(message_id=message_id, answer=answer, sources=[])
 
     if needs_search:
@@ -152,6 +154,8 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
             {"$addToSet": {"conversation_ids": session_id},
              "$inc": {"total_messages": 1}}
         )
+        if not show_form:
+            await _log_knowledge_gap(tenant_id, req.query, req.current_url, "no_context", message_id)
         return ChatResponse(message_id=message_id, answer=answer, sources=[], show_enquiry_form=show_form)
 
     context_text = "\n\n".join([
@@ -328,3 +332,56 @@ async def _rewrite_search_query(query: str) -> tuple[str, bool, bool]:
     except Exception:
         # If the LLM call fails, fall back to the original query and treat as searchable
         return q, True, False
+
+
+async def _log_knowledge_gap(tenant_id: str, query: str, url: str, gap_type: str, message_id: str):
+    """Log a knowledge gap with embedding for similarity clustering."""
+    try:
+        # Generate embedding for the query
+        embedding_resp = await openai_client.embeddings.create(
+            model="text-embedding-3-small",
+            input=query,
+        )
+        embedding = embedding_resp.data[0].embedding
+
+        # Check for existing similar gaps (cosine similarity > 0.85)
+        similar = await db.knowledge_gaps.find_one({
+            "tenant_id": tenant_id,
+            "status": "open",
+            "embedding": {"$exists": True},
+        }, {
+            "query": 1,
+            "embedding": 1,
+            "count": 1,
+            "first_seen": 1,
+        })
+
+        if similar and similar.get("embedding"):
+            sim_embedding = np.array(similar["embedding"])
+            new_embedding = np.array(embedding)
+            cos_sim = np.dot(sim_embedding, new_embedding) / (np.linalg.norm(sim_embedding) * np.linalg.norm(new_embedding))
+            if cos_sim > 0.85:
+                # Increment count on existing gap
+                await db.knowledge_gaps.update_one(
+                    {"_id": similar["_id"]},
+                    {"$inc": {"count": 1}, "$set": {"last_seen": datetime.now(timezone.utc)}}
+                )
+                return
+
+        # Create new gap
+        await db.knowledge_gaps.insert_one({
+            "tenant_id": tenant_id,
+            "query": query,
+            "url": url,
+            "gap_type": gap_type,  # "no_context" | "out_of_scope"
+            "message_id": message_id,
+            "embedding": embedding,
+            "count": 1,
+            "status": "open",  # open | resolved | dismissed
+            "resolved_by_faq_id": None,
+            "first_seen": datetime.now(timezone.utc),
+            "last_seen": datetime.now(timezone.utc),
+        })
+    except Exception:
+        # Never break chat for logging
+        pass

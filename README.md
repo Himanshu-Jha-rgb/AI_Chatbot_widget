@@ -261,6 +261,7 @@ npm run dev
 4. Go to Crawl Jobs and start a crawl of your website (e.g., `https://example.com`).
 5. Add the copied script tag to your site's HTML file.
 6. Interact with the chat widget!
+7. Visit **Knowledge Gaps** in the dashboard to see unanswered questions and add FAQ answers to resolve them.
 
 ## 5. Testing the Widget Locally
 
@@ -377,6 +378,7 @@ flowchart LR
 3. Click **"Index"** to trigger background ingestion — formats each as `Q: ...\nA: ...` and runs the pipeline.
 4. Can re-index to pick up new or updated FAQs (clears existing indexed data first).
 5. After indexing, suggested questions are auto-generated from indexed content.
+6. **Knowledge Gap Resolution** — FAQs can also be created directly from the Knowledge Gaps page, which auto-indexes them and marks the gap as resolved.
 
 #### Text Documents
 1. Create a text document source container via `POST /dashboard/sources` (type: `text`).
@@ -476,6 +478,81 @@ else:
 - View auto-generated questions (grayed out, read-only)
 - Add/edit/remove manual questions
 - Save changes via `PUT /tenants/suggested-questions`
+
+## Knowledge Improvement (Knowledge Gaps)
+
+When the chatbot cannot answer a question — either because it's classified as out-of-scope or no relevant content was found in the knowledge base — the backend logs the query as a **knowledge gap**. Gaps are clustered by vector similarity so that different phrasings of the same question (e.g., *"hostel fees for class 10"* and *"hostel charges class 10"*) are grouped together, showing the tenant the most-impactful gaps first.
+
+### Flow
+
+```mermaid
+sequenceDiagram
+    participant Visitor as Website Visitor
+    participant Widget as Chat Widget
+    participant API as FastAPI Backend
+    participant GapTracker as Knowledge Gap Logger
+    participant Embedder as text-embedding-3-small
+    participant DB as MongoDB
+
+    Visitor->>Widget: Types "hostel fees for class 10"
+    Widget->>API: POST /chat { query }
+    
+    alt No relevant content found
+        API->>API: Returns "I don't have that information"
+        API->>Embedder: Embed the query
+        API->>GapTracker: Log as "no_context" gap
+        GapTracker->>DB: Check similar gaps (cosine > 0.85)
+        alt Similar gap exists
+            GapTracker->>DB: Increment count on existing gap
+        else New gap
+            GapTracker->>DB: Insert gap with embedding + count: 1
+        end
+    end
+
+    Note over Dashboard: Tenant reviews gaps later
+    Dashboard->>API: GET /dashboard/knowledge/gaps
+    API->>DB: Query gaps, find similar FAQs via embedding
+    API-->>Dashboard: Gaps sorted by count (desc) + similar FAQs
+    
+    Dashboard->>Dashboard: Tenant writes answer
+    Dashboard->>API: POST /dashboard/knowledge/{gap_id}/resolve
+    Note over API: Creates FAQ + indexes it into vector search
+    API-->>Dashboard: Gap marked as resolved
+
+    Note over Next visitor: Same question → now answered
+    NextVisitor->>Widget: "hostel fees for class 10"
+    Widget->>API: POST /chat
+    API->>DB: Vector search finds the new FAQ
+    API-->>Widget: Returns answer with sources
+```
+
+### Features
+
+- **Automatic logging** — Every unanswered query (out-of-scope or no-context) is logged with an embedding for similarity matching.
+- **Similarity de-duplication** — If the same question is asked again (or a similar one), the count is incremented rather than creating duplicates. Threshold: cosine similarity > 0.85.
+- **Similar FAQ suggestions** — When viewing a gap, the dashboard shows existing FAQs that are semantically close (cosine > 0.8), so tenants can see if the answer already exists or adapt an existing one.
+- **One-click resolve** — Tenants can write an answer and select a FAQ source directly from the Knowledge Gaps page. The backend creates the FAQ pair, indexes it into the vector search pipeline, and marks the gap as resolved.
+- **Stats & prioritization** — Dashboard shows total gaps, unresolved count, resolved count, and the most-asked unanswered questions, sorted by frequency.
+
+### Dashboard Page
+
+Navigate to **Knowledge Gaps** in the sidebar:
+- **KPIs** at the top: unresolved, resolved, total, and top-gap frequency
+- **Most-asked list**: top 5 unanswered questions ranked by count
+- **Full gap list**: each gap shows query text, times asked, last-seen timestamp, and similar FAQs
+- **Resolve form**: inline expandable form to create and index a FAQ answer immediately
+- **Filter tabs**: Unresolved / Resolved / All
+
+### API Endpoints
+
+```
+GET  /dashboard/knowledge/gaps                     # List gaps (filter: status=open|resolved|all)
+GET  /dashboard/knowledge/gaps/stats               # Aggregate stats + top gaps
+POST /dashboard/knowledge/gaps/{gap_id}/resolve    # Resolve (action: create_faq | dismiss)
+POST /dashboard/knowledge/gaps/cluster              # Re-cluster gaps by similarity
+```
+
+All endpoints require JWT authentication (`Authorization: Bearer <token>`).
 
 ## Lead Generation (Enquiry Form)
 
@@ -597,6 +674,10 @@ If search returns zero results for a non-greeting query, the system returns *"I 
 | PUT | `/dashboard/sources/{source_id}/docs/{doc_id}` | JWT | Update a text document |
 | DELETE | `/dashboard/sources/{source_id}/docs/{doc_id}` | JWT | Delete a text document + its chunks |
 | POST | `/dashboard/sources/{source_id}/docs/index` | JWT | Index all text documents for search |
+| GET | `/dashboard/knowledge/gaps` | JWT | List knowledge gaps (filter by status) |
+| GET | `/dashboard/knowledge/gaps/stats` | JWT | Get gap stats + top unanswered questions |
+| POST | `/dashboard/knowledge/gaps/{gap_id}/resolve` | JWT | Resolve a gap (create FAQ or dismiss) |
+| POST | `/dashboard/knowledge/gaps/cluster` | JWT | Re-cluster open gaps by vector similarity |
 
 ## Database Collections
 
@@ -614,3 +695,4 @@ If search returns zero results for a non-greeting query, the system returns *"I 
 | `documents` | Text document content |
 | `leads` | Enquiry form submissions |
 | `message_feedback` | Like/dislike feedback on AI responses |
+| `knowledge_gaps` | Unanswered queries with embeddings for similarity clustering |

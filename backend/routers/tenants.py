@@ -67,10 +67,14 @@ async def get_stats(current_tenant: dict = Depends(get_current_tenant)):
     pages = await db.pages.count_documents({"tenant_id": tenant_id})
     chunks = await db.chunks.count_documents({"tenant_id": tenant_id})
     queries = await db.conversations.count_documents({"tenant_id": tenant_id})
+    # Count website crawls as sources (at least one completed crawl = 1 website source)
+    crawl_sources = await db.crawl_jobs.count_documents({"tenant_id": tenant_id, "status": "done"})
+    doc_sources = await db.sources.count_documents({"tenant_id": tenant_id})
     return {
         "pages_crawled": pages,
         "chunks_indexed": chunks,
-        "queries_this_month": queries
+        "queries_this_month": queries,
+        "knowledge_sources": crawl_sources + doc_sources,
     }
 
 @router.put("/suggested-questions")

@@ -1,172 +1,163 @@
 import React, { useEffect, useState } from 'react';
-import { API_BASE_URL, apiUrl, handleUnauthorized } from '../api';
+import { apiUrl, handleUnauthorized } from '../api';
 
 const Settings = () => {
-    const [me, setMe] = useState(null);
-    const [manualQuestions, setManualQuestions] = useState([]);
-    const [autoQuestions, setAutoQuestions] = useState([]);
-    const [newQuestion, setNewQuestion] = useState('');
-    const [saving, setSaving] = useState(false);
+  const [me, setMe] = useState(null);
+  const [manualQuestions, setManualQuestions] = useState([]);
+  const [autoQuestions, setAutoQuestions] = useState([]);
+  const [newQuestion, setNewQuestion] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-    useEffect(() => {
-        fetchMe();
-    }, []);
+  useEffect(() => { fetchMe(); }, []);
 
-    const fetchMe = async () => {
-        const token = localStorage.getItem('token');
-        const res = await fetch(apiUrl('/tenants/me'), {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (handleUnauthorized(res)) return;
-        if (res.ok) {
-            const data = await res.json();
-            setMe(data);
-            setManualQuestions(data.suggested_questions_manual || []);
-            setAutoQuestions(data.suggested_questions_auto || []);
-        }
-    };
+  const fetchMe = async () => {
+    const token = localStorage.getItem('token');
+    const res = await fetch(apiUrl('/tenants/me'), {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (handleUnauthorized(res)) return;
+    if (res.ok) {
+      const data = await res.json();
+      setMe(data);
+      setManualQuestions(data.suggested_questions_manual || []);
+      setAutoQuestions(data.suggested_questions_auto || []);
+    }
+  };
 
-    const rotateKey = async () => {
-        if (!window.confirm("Are you sure? This will invalidate your current API key and break existing widget installations.")) return;
-        
-        const token = localStorage.getItem('token');
-        const res = await fetch(apiUrl('/tenants/rotate_key'), {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (handleUnauthorized(res)) return;
-        if (res.ok) {
-            const data = await res.json();
-            setMe({ ...me, api_key: data.api_key });
-        }
-    };
+  const rotateKey = async () => {
+    if (!window.confirm('Are you sure? This will invalidate your current API key and break existing widget installations.')) return;
+    const token = localStorage.getItem('token');
+    const res = await fetch(apiUrl('/tenants/rotate_key'), {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (handleUnauthorized(res)) return;
+    if (res.ok) {
+      const data = await res.json();
+      setMe({ ...me, api_key: data.api_key });
+    }
+  };
 
-    const addQuestion = () => {
-        const q = newQuestion.trim();
-        if (!q || manualQuestions.includes(q)) return;
-        setManualQuestions([...manualQuestions, q]);
-        setNewQuestion('');
-    };
+  const addQuestion = () => {
+    const q = newQuestion.trim();
+    if (!q || manualQuestions.includes(q)) return;
+    setManualQuestions([...manualQuestions, q]);
+    setNewQuestion('');
+  };
 
-    const removeQuestion = (index) => {
-        setManualQuestions(manualQuestions.filter((_, i) => i !== index));
-    };
+  const removeQuestion = (index) => {
+    setManualQuestions(manualQuestions.filter((_, i) => i !== index));
+  };
 
-    const saveQuestions = async () => {
-        setSaving(true);
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(apiUrl('/tenants/suggested-questions'), {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ questions: manualQuestions })
-            });
-            if (handleUnauthorized(res)) return;
-            if (res.ok) {
-                alert('Suggested questions saved!');
-            }
-        } finally {
-            setSaving(false);
-        }
-    };
+  const saveQuestions = async () => {
+    setSaving(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(apiUrl('/tenants/suggested-questions'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ questions: manualQuestions })
+      });
+      if (handleUnauthorized(res)) return;
+      if (res.ok) alert('Suggested questions saved!');
+    } finally {
+      setSaving(false);
+    }
+  };
 
-    if (!me) return <div>Loading...</div>;
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1700);
+  };
 
-    const widgetUrl = window.location.origin;
-    const snippet = `<script src="${widgetUrl}/static/widget.js" data-api-key="${me.api_key}"></script>`;
+  if (!me) return <div className="loading"><div className="spinner"></div>Loading...</div>;
 
-    return (
+  const widgetUrl = window.location.origin;
+  const snippet = `<script src="${widgetUrl}/static/widget.js" data-api-key="${me.api_key}"></script>`;
+
+  return (
+    <div>
+      <div className="sec-head">
         <div>
-            <h1>Settings</h1>
-            <div className="card">
-                <h3>API Key</h3>
-                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
-                    <code style={{ background: '#eee', padding: '0.5rem', borderRadius: '4px', flex: 1 }}>{me.api_key}</code>
-                    <button className="btn" onClick={rotateKey} style={{ background: '#ff4444' }}>Rotate Key</button>
-                </div>
-            </div>
-
-            <div className="card">
-                <h3>Installation</h3>
-                <p>Add this code snippet to the <code>&lt;head&gt;</code> or just before the closing <code>&lt;/body&gt;</code> tag of your website:</p>
-                <div style={{ position: 'relative' }}>
-                    <pre style={{ background: '#111', color: '#fff', padding: '1rem', borderRadius: '4px', overflowX: 'auto' }}>
-                        <code>{snippet}</code>
-                    </pre>
-                    <button 
-                        onClick={() => navigator.clipboard.writeText(snippet)}
-                        className="btn" 
-                        style={{ position: 'absolute', top: '10px', right: '10px', padding: '0.25rem 0.5rem', fontSize: '12px' }}
-                    >
-                        Copy
-                    </button>
-                </div>
-            </div>
-            
-            <div className="card">
-                <h3>Domain</h3>
-                <p>Your registered domain: <strong>{me.domain}</strong></p>
-                <p style={{ color: '#666', fontSize: '14px' }}>Only requests originating from this domain will be accepted by your API key.</p>
-            </div>
-
-            <div className="card">
-                <h3>Suggested Questions (Empty Chat)</h3>
-                <p style={{ color: '#666', fontSize: '14px', marginBottom: '1rem' }}>
-                    These questions appear as clickable chips when a visitor opens the chat widget with no messages yet.
-                    If you add manual questions, they will be shown instead of auto-generated ones.
-                </p>
-
-                {autoQuestions.length > 0 && (
-                    <div style={{ marginBottom: '1rem' }}>
-                        <h4 style={{ fontSize: '14px', color: '#888', margin: '0 0 8px 0' }}>Auto-generated (from content):</h4>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                            {autoQuestions.map((q, i) => (
-                                <span key={i} style={{ padding: '4px 10px', borderRadius: '6px', background: '#f0f0f0', fontSize: '13px', color: '#555' }}>{q}</span>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                <div style={{ marginBottom: '0.5rem' }}>
-                    <h4 style={{ fontSize: '14px', margin: '0 0 8px 0' }}>Manual questions:</h4>
-                    <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                        <input
-                            className="input"
-                            style={{ marginBottom: 0, flex: 1 }}
-                            placeholder="Type a suggested question..."
-                            value={newQuestion}
-                            onChange={e => setNewQuestion(e.target.value)}
-                            onKeyPress={e => e.key === 'Enter' && addQuestion()}
-                        />
-                        <button className="btn" onClick={addQuestion}>Add</button>
-                    </div>
-
-                    {manualQuestions.length > 0 ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                            {manualQuestions.map((q, i) => (
-                                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: '#f8f9fa', borderRadius: '6px', fontSize: '14px' }}>
-                                    <span>{q}</span>
-                                    <button
-                                        onClick={() => removeQuestion(i)}
-                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc3545', fontSize: '16px', padding: '0 4px' }}
-                                    >&times;</button>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <p style={{ color: '#aaa', fontSize: '13px', fontStyle: 'italic' }}>No manual questions added yet.</p>
-                    )}
-                </div>
-
-                <button className="btn" onClick={saveQuestions} disabled={saving} style={{ marginTop: '0.5rem' }}>
-                    {saving ? 'Saving...' : 'Save Questions'}
-                </button>
-            </div>
+          <div className="sh-title">Settings</div>
+          <div className="sh-desc">API keys, installation, and suggested questions.</div>
         </div>
-    );
+      </div>
+
+      <div className="card card-pad" style={{ marginBottom: '14px' }}>
+        <div className="card-h">API Key</div>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <code style={{ background: 'var(--canvas-soft-2)', padding: '8px 12px', borderRadius: 'var(--r-sm)', flex: 1, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{me.api_key}</code>
+          <button className="btn btn-sm btn-danger" onClick={rotateKey}>Rotate Key</button>
+        </div>
+      </div>
+
+      <div className="card card-pad" style={{ marginBottom: '14px' }}>
+        <div className="card-h">Installation</div>
+        <div className="card-desc">Add this code snippet just before the closing <code>&lt;/body&gt;</code> tag of your website:</div>
+        <div className="code" style={{ marginTop: '10px' }}>
+          <button className="copy-btn" onClick={() => copyToClipboard(snippet)}>{copied ? 'Copied!' : 'Copy'}</button>
+          <code style={{ color: '#CFE9DE', whiteSpace: 'pre-wrap' }}>{snippet}</code>
+        </div>
+      </div>
+
+      <div className="card card-pad" style={{ marginBottom: '14px' }}>
+        <div className="card-h">Domain</div>
+        <p style={{ fontSize: '13px' }}>Your registered domain: <strong>{me.domain}</strong></p>
+        <p style={{ fontSize: '12.5px', color: 'var(--body)', marginTop: '4px' }}>Only requests originating from this domain will be accepted by your API key.</p>
+      </div>
+
+      <div className="card card-pad">
+        <div className="card-h">Suggested Questions</div>
+        <div className="card-desc">These appear as clickable chips when a visitor opens the chat widget with no messages yet.</div>
+
+        {autoQuestions.length > 0 && (
+          <div style={{ marginBottom: '14px' }}>
+            <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--mute)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '.03em' }}>Auto-generated from content:</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+              {autoQuestions.map((q, i) => (
+                <span key={i} className="pill pill-neutral" style={{ padding: '4px 10px', fontSize: '12px' }}>{q}</span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ marginBottom: '10px' }}>
+          <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--mute)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '.03em' }}>Manual questions:</div>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+            <input
+              className="inp"
+              style={{ marginBottom: 0, flex: 1 }}
+              placeholder="Type a suggested question..."
+              value={newQuestion}
+              onChange={e => setNewQuestion(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addQuestion()}
+            />
+            <button className="btn" onClick={addQuestion}>Add</button>
+          </div>
+
+          {manualQuestions.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {manualQuestions.map((q, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 10px', background: 'var(--canvas-soft)', borderRadius: 'var(--r-sm)', fontSize: '13px' }}>
+                  <span>{q}</span>
+                  <button onClick={() => removeQuestion(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--error)', fontSize: '15px', padding: '0 4px' }}>&times;</button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={{ color: 'var(--mute)', fontSize: '12px', fontStyle: 'italic' }}>No manual questions added yet.</p>
+          )}
+        </div>
+
+        <button className="btn btn-primary" onClick={saveQuestions} disabled={saving}>
+          {saving ? 'Saving...' : 'Save Questions'}
+        </button>
+      </div>
+    </div>
+  );
 };
 
 export default Settings;

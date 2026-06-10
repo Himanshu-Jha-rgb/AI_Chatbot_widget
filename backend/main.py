@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
 from starlette.middleware.base import BaseHTTPMiddleware
-from routers import tenants, crawl, chat, sources, faqs, text_docs, leads, admin
+from routers import tenants, crawl, chat, sources, faqs, text_docs, leads, admin, knowledge_improvement
 from core.config import settings
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -52,6 +52,7 @@ app.include_router(faqs.router)
 app.include_router(text_docs.router)
 app.include_router(leads.router)
 app.include_router(admin.router)
+app.include_router(knowledge_improvement.router)
 
 # Mount widget dist directory
 os.makedirs("../widget/dist", exist_ok=True)
@@ -107,3 +108,5 @@ async def ensure_lookup_indexes():
     await db.faqs.create_index([("tenant_id", 1), ("source_id", 1), ("faq_id", 1)])
     await db.documents.create_index([("tenant_id", 1), ("source_id", 1), ("doc_id", 1)])
     await db.leads.create_index([("tenant_id", 1), ("created_at", -1)])
+    await db.knowledge_gaps.create_index([("tenant_id", 1), ("status", 1)])
+    await db.knowledge_gaps.create_index([("tenant_id", 1), ("cluster_id", 1)])

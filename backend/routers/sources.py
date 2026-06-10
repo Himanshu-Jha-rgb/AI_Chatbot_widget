@@ -24,7 +24,7 @@ async def _delete_source_data(tenant_id: str, source_id: str) -> None:
 
 @router.get("")
 async def list_sources(current_tenant: dict = Depends(get_current_tenant)):
-    """List all knowledge sources for the tenant."""
+    """List all knowledge sources for the tenant, including website crawls."""
     tenant_id = current_tenant["tenant_id"]
     sources = await db.sources.find(
         {"tenant_id": tenant_id},
@@ -36,6 +36,28 @@ async def list_sources(current_tenant: dict = Depends(get_current_tenant)):
         source["chunk_count"] = await db.chunks.count_documents({
             "tenant_id": tenant_id,
             "source_id": source["source_id"],
+        })
+
+    # Merge completed crawl jobs as website-type sources
+    crawl_jobs = await db.crawl_jobs.find(
+        {"tenant_id": tenant_id, "status": "done"},
+        {"_id": 0}
+    ).sort("started_at", -1).to_list(length=100)
+
+    for job in crawl_jobs:
+        sources.append({
+            "tenant_id": tenant_id,
+            "source_id": f"crawl_{job.get('job_id', '')}",
+            "source_type": "website",
+            "name": job.get("seed_url", "Website"),
+            "status": "ready",
+            "chunk_count": job.get("chunks_created", 0),
+            "config": {
+                "seed_url": job.get("seed_url"),
+                "pages_found": job.get("pages_found", 0),
+            },
+            "created_at": job.get("started_at"),
+            "last_indexed_at": job.get("finished_at"),
         })
 
     return sources

@@ -263,3 +263,31 @@ def _section_body_text(section_text: str) -> str:
             continue
         body_lines.append(line)
     return "\n".join(body_lines).strip()
+
+
+async def ingest_faq_pair(
+    tenant_id: str,
+    source_id: str,
+    question: str,
+    answer: str,
+) -> str:
+    """Ingest a single FAQ pair as a document."""
+    import uuid
+    from datetime import datetime, timezone
+
+    doc_id = str(uuid.uuid4())
+    content = f"Q: {question}\nA: {answer}"
+    title = question[:80]
+
+    result = await ingest_document(
+        tenant_id=tenant_id,
+        source_id=source_id,
+        doc_id=doc_id,
+        content=content,
+        title=title,
+    )
+
+    if not result["indexed"]:
+        raise Exception("Failed to index FAQ")
+
+    return doc_id
