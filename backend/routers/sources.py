@@ -142,6 +142,30 @@ async def delete_source(
     return {"status": "deleted", "source_id": source_id}
 
 
+@router.delete("/crawl/{job_id}")
+async def delete_crawl_source(
+    job_id: str,
+    current_tenant: dict = Depends(get_current_tenant),
+):
+    """Delete a crawl source and all its indexed data."""
+    tenant_id = current_tenant["tenant_id"]
+    job = await db.crawl_jobs.find_one(
+        {"tenant_id": tenant_id, "job_id": job_id},
+    )
+    if not job:
+        raise HTTPException(status_code=404, detail="Crawl job not found")
+
+    # Delete indexed data
+    await db.chunks.delete_many({"tenant_id": tenant_id, "crawl_id": job_id})
+    await db.parents.delete_many({"tenant_id": tenant_id, "crawl_id": job_id})
+    await db.pages.delete_many({"tenant_id": tenant_id, "crawl_id": job_id})
+
+    # Delete the crawl job record
+    await db.crawl_jobs.delete_one({"tenant_id": tenant_id, "job_id": job_id})
+
+    return {"status": "deleted", "job_id": job_id}
+
+
 # --- PDF Upload ---
 
 async def _index_pdf_background(tenant_id: str, source_id: str, file_path: str, name: str):

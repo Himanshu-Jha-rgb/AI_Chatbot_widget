@@ -16,12 +16,51 @@ const TYPE_ICONS = {
   text: { bg: '#d8ccf1', color: '#4c2889', label: 'DOC' },
 };
 
+const DeleteModal = ({ source, onConfirm, onCancel }) => {
+  const [confirmName, setConfirmName] = useState('');
+  const displayName = source.source_type === 'website' ? source.config?.seed_url : source.name;
+  const matchName = source.source_type === 'website' ? source.config?.seed_url : source.name;
+
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-h">Delete Source</div>
+        <p style={{ fontSize: '13px', color: 'var(--text)', marginBottom: '12px' }}>
+          This will permanently delete <strong>{displayName}</strong> and all its indexed data. This action cannot be undone.
+        </p>
+        <div className="field">
+          <label>Type <strong>{matchName}</strong> to confirm</label>
+          <input
+            className="inp"
+            placeholder={matchName}
+            value={confirmName}
+            onChange={e => setConfirmName(e.target.value)}
+            autoFocus
+          />
+        </div>
+        <div className="modal-actions">
+          <button className="btn" onClick={onCancel}>Cancel</button>
+          <button
+            className="btn btn-danger"
+            disabled={confirmName !== matchName}
+            onClick={() => onConfirm(source)}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Sources = () => {
   const navigate = useNavigate();
   const [sources, setSources] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(null);
   const [newName, setNewName] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchSources = async () => {
     const token = localStorage.getItem('token');
@@ -35,15 +74,23 @@ const Sources = () => {
 
   useEffect(() => { fetchSources(); }, []);
 
-  const deleteSource = async (sourceId, name) => {
-    if (!window.confirm(`Delete "${name}"? This will remove all indexed data.`)) return;
+  const handleDelete = async (source) => {
+    setDeleting(true);
     const token = localStorage.getItem('token');
-    const res = await fetch(apiUrl(`/dashboard/sources/${sourceId}`), {
+    const isCrawl = source.source_type === 'website';
+    const url = isCrawl
+      ? apiUrl(`/dashboard/sources/crawl/${source.config?.job_id || source.source_id.replace('crawl_', '')}`)
+      : apiUrl(`/dashboard/sources/${source.source_id}`);
+    const res = await fetch(url, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` }
     });
     if (handleUnauthorized(res)) return;
-    if (res.ok) fetchSources();
+    if (res.ok) {
+      setDeleteTarget(null);
+      fetchSources();
+    }
+    setDeleting(false);
   };
 
   const createSource = async (type) => {
@@ -144,11 +191,9 @@ const Sources = () => {
                       </div>
                     </div>
                     <span className="pill pill-ok" style={{ flexShrink: 0 }}>Ready</span>
-                    {!isWebsite && (
-                      <button className="btn btn-sm btn-danger" onClick={() => deleteSource(source.source_id, source.name)} style={{ marginLeft: '8px' }}>
-                        Delete
-                      </button>
-                    )}
+                    <button className="btn btn-sm btn-danger" onClick={() => setDeleteTarget(source)} style={{ marginLeft: '8px' }}>
+                      Delete
+                    </button>
                   </div>
                 );
               })}
@@ -156,6 +201,14 @@ const Sources = () => {
           </div>
         );
       })}
+
+      {deleteTarget && (
+        <DeleteModal
+          source={deleteTarget}
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 };
