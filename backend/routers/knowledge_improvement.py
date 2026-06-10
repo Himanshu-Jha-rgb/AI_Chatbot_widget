@@ -64,13 +64,13 @@ async def list_knowledge_gaps(
                 for faq in faqs:
                     faq_emb = faq.get("embedding")
                     if faq_emb and isinstance(faq_emb, list) and len(faq_emb) > 0:
-                        cos_sim = np.dot(gap_emb, np.array(faq_emb)) / (np.linalg.norm(gap_emb) * np.linalg.norm(np.array(faq_emb)))
+                        cos_sim = float(np.dot(gap_emb, np.array(faq_emb)) / (np.linalg.norm(gap_emb) * np.linalg.norm(np.array(faq_emb))))
                         if cos_sim > 0.8:
                             similar_faqs.append({
                                 "faq_id": str(faq["_id"]),
                                 "question": faq["question"],
                                 "answer": faq["answer"],
-                                "similarity": round(float(cos_sim), 2),
+                                "similarity": round(cos_sim, 2),
                             })
         except Exception:
             pass
