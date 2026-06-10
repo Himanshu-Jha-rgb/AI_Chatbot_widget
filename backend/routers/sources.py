@@ -15,6 +15,13 @@ router = APIRouter(prefix="/dashboard/sources", tags=["sources"])
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
 
 
+def _to_iso(dt):
+    """Convert a datetime to ISO string, or return as-is if not a datetime."""
+    if dt is None:
+        return None
+    return dt.isoformat() if hasattr(dt, "isoformat") else str(dt)
+
+
 async def _delete_source_data(tenant_id: str, source_id: str) -> None:
     """Delete all indexed data for a source."""
     await db.chunks.delete_many({"tenant_id": tenant_id, "source_id": source_id})
@@ -56,8 +63,8 @@ async def list_sources(current_tenant: dict = Depends(get_current_tenant)):
                 "seed_url": job.get("seed_url"),
                 "pages_found": job.get("pages_found", 0),
             },
-            "created_at": job.get("started_at"),
-            "last_indexed_at": job.get("finished_at"),
+            "created_at": _to_iso(job.get("started_at")),
+            "last_indexed_at": _to_iso(job.get("finished_at")),
         })
 
     return sources

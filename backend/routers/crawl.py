@@ -58,18 +58,29 @@ async def dashboard_start_crawl(req: CrawlRequest, background_tasks: BackgroundT
     background_tasks.add_task(crawl_task, current_tenant["tenant_id"], seed_url, job_id)
     return {"job_id": job_id}
 
+def _serialize_job(job):
+    """Convert datetime fields to ISO strings for frontend consumption."""
+    if not job:
+        return job
+    for field in ("started_at", "finished_at"):
+        val = job.get(field)
+        if val is not None:
+            job[field] = val.isoformat() if hasattr(val, "isoformat") else str(val)
+    return job
+
+
 @router.get("/dashboard/crawl/history")
 async def dashboard_crawl_history(current_tenant: dict = Depends(get_current_tenant)):
     jobs = await db.crawl_jobs.find(
         {"tenant_id": current_tenant["tenant_id"]},
         {"_id": 0}
     ).sort("started_at", -1).to_list(length=100)
-    return jobs
+    return [_serialize_job(j) for j in jobs]
 
 @router.get("/dashboard/crawl/{job_id}")
 async def dashboard_get_crawl_status(job_id: str, current_tenant: dict = Depends(get_current_tenant)):
     job = await db.crawl_jobs.find_one({"job_id": job_id, "tenant_id": current_tenant["tenant_id"]}, {"_id": 0})
-    return job
+    return _serialize_job(job)
 
 @router.delete("/dashboard/index")
 async def dashboard_delete_index(current_tenant: dict = Depends(get_current_tenant)):
