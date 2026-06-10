@@ -117,14 +117,53 @@ const KnowledgeImprovement = () => {
           <div className="card-h">Most asked unanswered questions</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {stats.top_gaps.slice(0, 5).map((g, i) => (
-              <div key={g.gap_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: i < 4 ? '1px solid var(--hairline)' : 'none' }}>
+              <div key={g.gap_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: i < 4 ? '1px solid var(--hairline)' : 'none' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <span style={{ fontSize: '12px', color: 'var(--mute)', fontWeight: 600, minWidth: '20px' }}>#{i + 1}</span>
                   <span style={{ fontSize: '13px' }}>{g.query}</span>
                 </div>
-                <span className="pill pill-warn" style={{ flexShrink: 0 }}>{g.count}x</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="pill pill-warn">{g.count}x</span>
+                  <button className="btn btn-sm btn-primary" onClick={() => startResolve(g)}>+ Answer</button>
+                  <button className="btn btn-sm btn-ghost" onClick={() => resolveGap(g.gap_id, 'dismiss')}>Dismiss</button>
+                </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Resolve form - shows when resolving any gap */}
+      {resolving && !gaps.find(g => g.gap_id === resolving) && (
+        <div className="card card-pad" style={{ marginBottom: '18px', border: '1px solid var(--link)' }}>
+          <div style={{ fontSize: '13px', fontWeight: 600, marginBottom: '10px' }}>Add FAQ answer</div>
+          <div className="field">
+            <label>Question</label>
+            <input className="inp" value={faqForm.question} onChange={e => setFaqForm(p => ({ ...p, question: e.target.value }))} />
+          </div>
+          <div className="field">
+            <label>Answer</label>
+            <textarea className="inp" value={faqForm.answer} onChange={e => setFaqForm(p => ({ ...p, answer: e.target.value }))} rows={3} style={{ resize: 'vertical' }} />
+          </div>
+          <div className="field">
+            <label>FAQ Source</label>
+            <select className="inp" value={faqForm.source_id} onChange={e => setFaqForm(p => ({ ...p, source_id: e.target.value }))}>
+              <option value="">Select a source...</option>
+              {sources.filter(s => s.source_type === 'faq').map(s => (
+                <option key={s.source_id} value={s.source_id}>{s.name}</option>
+              ))}
+            </select>
+            <div style={{ fontSize: '12px', color: 'var(--mute)', marginTop: '4px' }}>Select an existing FAQ source or create one in Sources first.</div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              className="btn btn-primary"
+              onClick={() => resolveGap(resolving, 'create_faq')}
+              disabled={!faqForm.question.trim() || !faqForm.answer.trim() || !faqForm.source_id}
+            >
+              Create & Index FAQ
+            </button>
+            <button className="btn" onClick={cancelResolve}>Cancel</button>
           </div>
         </div>
       )}

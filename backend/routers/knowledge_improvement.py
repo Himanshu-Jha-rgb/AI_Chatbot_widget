@@ -57,21 +57,24 @@ async def list_knowledge_gaps(
     for gap in gaps:
         gap["gap_id"] = str(gap["_id"])
         similar_faqs = []
-        if gap.get("embedding") and faqs:
-            gap_emb = np.array(gap["embedding"])
-            for faq in faqs:
-                if faq.get("embedding"):
-                    faq_emb = np.array(faq["embedding"])
-                    cos_sim = np.dot(gap_emb, faq_emb) / (np.linalg.norm(gap_emb) * np.linalg.norm(faq_emb))
-                    if cos_sim > 0.8:
-                        similar_faqs.append({
-                            "faq_id": str(faq["_id"]),
-                            "question": faq["question"],
-                            "answer": faq["answer"],
-                            "similarity": round(cos_sim, 2),
-                        })
+        try:
+            emb = gap.get("embedding")
+            if emb and isinstance(emb, list) and len(emb) > 0 and faqs:
+                gap_emb = np.array(emb)
+                for faq in faqs:
+                    faq_emb = faq.get("embedding")
+                    if faq_emb and isinstance(faq_emb, list) and len(faq_emb) > 0:
+                        cos_sim = np.dot(gap_emb, np.array(faq_emb)) / (np.linalg.norm(gap_emb) * np.linalg.norm(np.array(faq_emb)))
+                        if cos_sim > 0.8:
+                            similar_faqs.append({
+                                "faq_id": str(faq["_id"]),
+                                "question": faq["question"],
+                                "answer": faq["answer"],
+                                "similarity": round(float(cos_sim), 2),
+                            })
+        except Exception:
+            pass
         gap["similar_faqs"] = sorted(similar_faqs, key=lambda x: x["similarity"], reverse=True)[:3]
-        # Remove embedding from response (too large)
         gap.pop("embedding", None)
         result.append(gap)
 
