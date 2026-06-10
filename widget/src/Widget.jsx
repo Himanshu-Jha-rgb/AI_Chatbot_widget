@@ -98,29 +98,22 @@ function useStyleInjection() {
     }, []);
 }
 
-function useIsMobile(breakpoint = 768) {
-    const checkMobile = () => {
-        const w = window.innerWidth;
-        const h = window.innerHeight;
-        const aspectRatio = h / w;
-        return w <= breakpoint || (w <= 1024 && aspectRatio > 1.7);
-    };
-    const [isMobile, setIsMobile] = useState(
-        typeof window !== 'undefined' ? checkMobile() : false
-    );
+function useIsMobile() {
+    const [isMobile, setIsMobile] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        const ua = navigator.userAgent || '';
+        const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CREW/i;
+        return mobileRegex.test(ua);
+    });
     useEffect(() => {
-        const mq = window.matchMedia(`(max-width: ${breakpoint}px)`);
-        const check = () => setIsMobile(checkMobile());
-        mq.addEventListener('change', check);
-        window.addEventListener('resize', check);
-        check();
-        const id = setInterval(check, 300);
-        return () => {
-            mq.removeEventListener('change', check);
-            window.removeEventListener('resize', check);
-            clearInterval(id);
+        const check = () => {
+            const ua = navigator.userAgent || '';
+            const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CREW/i;
+            setIsMobile(mobileRegex.test(ua));
         };
-    }, [breakpoint]);
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, []);
     return isMobile;
 }
 
