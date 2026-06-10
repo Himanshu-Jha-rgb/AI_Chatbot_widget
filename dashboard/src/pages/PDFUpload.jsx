@@ -51,41 +51,42 @@ const PDFUpload = () => {
 
     return (
         <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
-                <button className="btn" style={{ background: '#666' }} onClick={() => navigate('/sources')}>
-                    &larr; Back
-                </button>
-                <h1 style={{ margin: 0 }}>Upload PDF</h1>
+            <div className="sec-head">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <button className="btn" onClick={() => navigate('/sources')}>&larr; Back</button>
+                    <div>
+                        <div className="sh-title">Upload PDF</div>
+                    </div>
+                </div>
             </div>
 
-            <div className="card">
-                <div style={{ marginBottom: '1rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 500 }}>Source Name</label>
+            <div className="card card-pad" style={{ marginBottom: '18px' }}>
+                <div className="field">
+                    <label>Source Name</label>
                     <input
-                        className="input"
+                        className="inp"
                         placeholder="e.g., School Brochure 2025"
                         value={name}
                         onChange={e => setName(e.target.value)}
                     />
                 </div>
 
-                <div style={{ marginBottom: '1rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 500 }}>PDF File</label>
+                <div className="field">
+                    <label>PDF File</label>
                     <input
                         type="file"
                         accept=".pdf"
                         onChange={e => setFile(e.target.files[0])}
-                        style={{ marginBottom: '0.5rem' }}
                     />
                     {file && (
-                        <div style={{ fontSize: '14px', color: '#666' }}>
+                        <div style={{ fontSize: '13px', color: 'var(--body)', marginTop: '6px' }}>
                             {file.name} ({(file.size / 1024).toFixed(1)} KB)
                         </div>
                     )}
                 </div>
 
                 <button
-                    className="btn"
+                    className="btn btn-primary"
                     onClick={handleUpload}
                     disabled={!file || !name.trim() || uploading}
                 >
@@ -93,23 +94,23 @@ const PDFUpload = () => {
                 </button>
 
                 {error && (
-                    <div style={{ marginTop: '1rem', color: '#ff4444', background: '#ffeeee', padding: '0.75rem', borderRadius: '4px' }}>
+                    <div style={{ marginTop: '12px', color: 'var(--error)', background: 'var(--error-soft)', padding: '10px 14px', borderRadius: 'var(--r-sm)', fontSize: '13px' }}>
                         {error}
                     </div>
                 )}
 
                 {result && (
-                    <div style={{ marginTop: '1rem', background: '#e8f5e9', padding: '1rem', borderRadius: '4px' }}>
-                        <p style={{ margin: 0, fontWeight: 500 }}>PDF uploaded and indexing started!</p>
-                        <p style={{ margin: '0.5rem 0 0', fontSize: '14px', color: '#555' }}>
+                    <div style={{ marginTop: '12px', background: 'var(--link-bg-soft)', padding: '14px', borderRadius: 'var(--r-sm)' }}>
+                        <p style={{ margin: 0, fontWeight: 500, fontSize: '14px' }}>PDF uploaded and indexing started!</p>
+                        <p style={{ margin: '6px 0 0', fontSize: '13px', color: 'var(--body)' }}>
                             Source: {result.name} | Status: {result.status}
                         </p>
-                        <p style={{ margin: '0.25rem 0 0', fontSize: '14px', color: '#555' }}>
+                        <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--body)' }}>
                             Indexing runs in the background. Check back in a minute to see indexed chunks.
                         </p>
                         <button
                             className="btn"
-                            style={{ marginTop: '0.75rem' }}
+                            style={{ marginTop: '10px' }}
                             onClick={() => navigate('/sources')}
                         >
                             View All Sources
@@ -118,9 +119,9 @@ const PDFUpload = () => {
                 )}
             </div>
 
-            <div className="card">
-                <h3>Supported PDFs</h3>
-                <ul style={{ margin: 0, paddingLeft: '1.25rem', lineHeight: 1.8 }}>
+            <div className="card card-pad">
+                <div className="card-h">Supported PDFs</div>
+                <ul style={{ margin: 0, paddingLeft: '20px', lineHeight: 1.8, fontSize: '13px', color: 'var(--body)' }}>
                     <li>Text-based PDFs (not scanned images)</li>
                     <li>Maximum file size: depends on server configuration</li>
                     <li>Text is extracted page by page and formatted as markdown</li>

@@ -109,7 +109,6 @@ const FAQs = () => {
         });
         if (handleUnauthorized(res)) return;
         if (res.ok) {
-            // Poll for indexing completion
             const poll = setInterval(async () => {
                 const sr = await fetch(apiUrl(`/dashboard/sources/${sourceId}`), {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -129,62 +128,61 @@ const FAQs = () => {
         }
     };
 
-    if (loading) return <div>Loading...</div>;
+    if (loading) return <div className="loading"><div className="spinner"></div>Loading...</div>;
 
     return (
         <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
-                <button className="btn" style={{ background: '#666' }} onClick={() => navigate('/sources')}>
-                    &larr; Back
-                </button>
-                <h1 style={{ margin: 0 }}>{source?.name || 'FAQs'}</h1>
-                {source && (
-                    <span style={{
-                        fontSize: '12px',
-                        padding: '2px 8px',
-                        borderRadius: '10px',
-                        background: source.status === 'ready' ? '#00c85322' : source.status === 'indexing' ? '#ff910022' : '#ff444422',
-                        color: source.status === 'ready' ? '#00c853' : source.status === 'indexing' ? '#ff9100' : '#ff4444',
-                        fontWeight: 600,
-                        textTransform: 'capitalize',
-                    }}>
-                        {source.status}
-                    </span>
-                )}
+            <div className="sec-head">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <button className="btn" onClick={() => navigate('/sources')}>&larr; Back</button>
+                    <div>
+                        <div className="sh-title">{source?.name || 'FAQs'}</div>
+                        {source && (
+                            <span className={`pill ${source.status === 'ready' ? 'pill-ok' : source.status === 'indexing' ? 'pill-warn' : 'pill-danger'}`}>
+                                {source.status}
+                            </span>
+                        )}
+                    </div>
+                </div>
             </div>
 
             {source && (
-                <div style={{ marginBottom: '1rem', color: '#666', fontSize: '14px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--body)', marginBottom: '16px' }}>
                     {faqs.length} FAQ{faqs.length !== 1 ? 's' : ''} | {source.chunk_count || 0} chunks indexed
-                    {source.last_indexed_at ? ` | Last indexed: ${new Date(source.last_indexed_at).toLocaleString()}` : ''}
+                    {source.last_indexed_at ? ` | Last indexed: ${new Date(source.last_indexed_at).toLocaleDateString()}` : ''}
                 </div>
             )}
 
-            <div className="card" style={{ marginBottom: '1.5rem' }}>
-                <h3>Add FAQ</h3>
-                <input
-                    className="input"
-                    placeholder="Question"
-                    value={newQuestion}
-                    onChange={e => setNewQuestion(e.target.value)}
-                />
-                <textarea
-                    className="input"
-                    placeholder="Answer"
-                    value={newAnswer}
-                    onChange={e => setNewAnswer(e.target.value)}
-                    rows={3}
-                    style={{ resize: 'vertical' }}
-                />
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button className="btn" onClick={addFaq} disabled={!newQuestion.trim() || !newAnswer.trim()}>
+            <div className="card card-pad" style={{ marginBottom: '18px' }}>
+                <div className="card-h">Add FAQ</div>
+                <div className="field">
+                    <label>Question</label>
+                    <input
+                        className="inp"
+                        placeholder="Enter the question"
+                        value={newQuestion}
+                        onChange={e => setNewQuestion(e.target.value)}
+                    />
+                </div>
+                <div className="field">
+                    <label>Answer</label>
+                    <textarea
+                        className="inp"
+                        placeholder="Enter the answer"
+                        value={newAnswer}
+                        onChange={e => setNewAnswer(e.target.value)}
+                        rows={3}
+                        style={{ resize: 'vertical' }}
+                    />
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button className="btn btn-primary" onClick={addFaq} disabled={!newQuestion.trim() || !newAnswer.trim()}>
                         Add FAQ
                     </button>
                     <button
                         className="btn"
                         onClick={indexFaqs}
                         disabled={indexing || faqs.length === 0}
-                        style={{ background: faqs.length > 0 ? '#0070f3' : '#999' }}
                     >
                         {indexing ? 'Indexing...' : 'Index All FAQs'}
                     </button>
@@ -192,64 +190,67 @@ const FAQs = () => {
             </div>
 
             {faqs.length === 0 && (
-                <div className="card" style={{ textAlign: 'center', color: '#666' }}>
-                    <p>No FAQs yet. Add your first Q&A pair above.</p>
+                <div className="card">
+                    <div className="empty-state">
+                        <div className="e-icon">✦</div>
+                        <div className="e-title">No FAQs yet</div>
+                        <div className="e-desc">Add your first Q&A pair above.</div>
+                    </div>
                 </div>
             )}
 
             {faqs.map(faq => (
-                <div key={faq.faq_id} className="card" style={{ padding: '1.25rem 1.5rem' }}>
+                <div key={faq.faq_id} className="card card-pad" style={{ marginBottom: '8px' }}>
                     {editingId === faq.faq_id ? (
                         <div>
-                            <input
-                                className="input"
-                                value={editQuestion}
-                                onChange={e => setEditQuestion(e.target.value)}
-                                placeholder="Question"
-                            />
-                            <textarea
-                                className="input"
-                                value={editAnswer}
-                                onChange={e => setEditAnswer(e.target.value)}
-                                rows={3}
-                                style={{ resize: 'vertical' }}
-                            />
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                <button className="btn" onClick={() => updateFaq(faq.faq_id)} disabled={!editQuestion.trim() || !editAnswer.trim()}>
+                            <div className="field">
+                                <input
+                                    className="inp"
+                                    value={editQuestion}
+                                    onChange={e => setEditQuestion(e.target.value)}
+                                    placeholder="Question"
+                                />
+                            </div>
+                            <div className="field">
+                                <textarea
+                                    className="inp"
+                                    value={editAnswer}
+                                    onChange={e => setEditAnswer(e.target.value)}
+                                    rows={3}
+                                    style={{ resize: 'vertical' }}
+                                    placeholder="Answer"
+                                />
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button className="btn btn-primary" onClick={() => updateFaq(faq.faq_id)} disabled={!editQuestion.trim() || !editAnswer.trim()}>
                                     Save
                                 </button>
-                                <button className="btn" style={{ background: '#666' }} onClick={() => setEditingId(null)}>
+                                <button className="btn" onClick={() => setEditingId(null)}>
                                     Cancel
                                 </button>
                             </div>
                         </div>
                     ) : (
                         <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                <div style={{ flex: 1 }}>
-                                    <p style={{ fontWeight: 600, margin: '0 0 0.25rem' }}>Q: {faq.question}</p>
-                                    <p style={{ margin: 0, color: '#555', whiteSpace: 'pre-wrap' }}>A: {faq.answer}</p>
-                                </div>
-                                <div style={{ display: 'flex', gap: '0.5rem', marginLeft: '1rem', flexShrink: 0 }}>
-                                    <button
-                                        className="btn"
-                                        style={{ background: '#ff9100' }}
-                                        onClick={() => {
-                                            setEditingId(faq.faq_id);
-                                            setEditQuestion(faq.question);
-                                            setEditAnswer(faq.answer);
-                                        }}
-                                    >
-                                        Edit
-                                    </button>
-                                    <button
-                                        className="btn"
-                                        style={{ background: '#ff4444' }}
-                                        onClick={() => deleteFaq(faq.faq_id)}
-                                    >
-                                        Delete
-                                    </button>
-                                </div>
+                            <div className="faq-q">Q: {faq.question}</div>
+                            <div className="faq-a">A: {faq.answer}</div>
+                            <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                                <button
+                                    className="btn btn-sm"
+                                    onClick={() => {
+                                        setEditingId(faq.faq_id);
+                                        setEditQuestion(faq.question);
+                                        setEditAnswer(faq.answer);
+                                    }}
+                                >
+                                    Edit
+                                </button>
+                                <button
+                                    className="btn btn-sm btn-danger"
+                                    onClick={() => deleteFaq(faq.faq_id)}
+                                >
+                                    Delete
+                                </button>
                             </div>
                         </div>
                     )}

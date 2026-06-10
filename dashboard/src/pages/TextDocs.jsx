@@ -128,62 +128,61 @@ const TextDocs = () => {
         }
     };
 
-    if (loading) return <div>Loading...</div>;
+    if (loading) return <div className="loading"><div className="spinner"></div>Loading...</div>;
 
     return (
         <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
-                <button className="btn" style={{ background: '#666' }} onClick={() => navigate('/sources')}>
-                    &larr; Back
-                </button>
-                <h1 style={{ margin: 0 }}>{source?.name || 'Text Documents'}</h1>
-                {source && (
-                    <span style={{
-                        fontSize: '12px',
-                        padding: '2px 8px',
-                        borderRadius: '10px',
-                        background: source.status === 'ready' ? '#00c85322' : source.status === 'indexing' ? '#ff910022' : '#ff444422',
-                        color: source.status === 'ready' ? '#00c853' : source.status === 'indexing' ? '#ff9100' : '#ff4444',
-                        fontWeight: 600,
-                        textTransform: 'capitalize',
-                    }}>
-                        {source.status}
-                    </span>
-                )}
+            <div className="sec-head">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <button className="btn" onClick={() => navigate('/sources')}>&larr; Back</button>
+                    <div>
+                        <div className="sh-title">{source?.name || 'Text Documents'}</div>
+                        {source && (
+                            <span className={`pill ${source.status === 'ready' ? 'pill-ok' : source.status === 'indexing' ? 'pill-warn' : 'pill-danger'}`}>
+                                {source.status}
+                            </span>
+                        )}
+                    </div>
+                </div>
             </div>
 
             {source && (
-                <div style={{ marginBottom: '1rem', color: '#666', fontSize: '14px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--body)', marginBottom: '16px' }}>
                     {docs.length} document{docs.length !== 1 ? 's' : ''} | {source.chunk_count || 0} chunks indexed
-                    {source.last_indexed_at ? ` | Last indexed: ${new Date(source.last_indexed_at).toLocaleString()}` : ''}
+                    {source.last_indexed_at ? ` | Last indexed: ${new Date(source.last_indexed_at).toLocaleDateString()}` : ''}
                 </div>
             )}
 
-            <div className="card" style={{ marginBottom: '1.5rem' }}>
-                <h3>Add Document</h3>
-                <input
-                    className="input"
-                    placeholder="Document title"
-                    value={newTitle}
-                    onChange={e => setNewTitle(e.target.value)}
-                />
-                <textarea
-                    className="input"
-                    placeholder="Document body (supports markdown formatting with ## headings)"
-                    value={newBody}
-                    onChange={e => setNewBody(e.target.value)}
-                    rows={8}
-                    style={{ resize: 'vertical', fontFamily: 'monospace' }}
-                />
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button className="btn" onClick={addDoc} disabled={!newTitle.trim() || !newBody.trim()}>
+            <div className="card card-pad" style={{ marginBottom: '18px' }}>
+                <div className="card-h">Add Document</div>
+                <div className="field">
+                    <label>Document Title</label>
+                    <input
+                        className="inp"
+                        placeholder="Document title"
+                        value={newTitle}
+                        onChange={e => setNewTitle(e.target.value)}
+                    />
+                </div>
+                <div className="field">
+                    <label>Document Body</label>
+                    <textarea
+                        className="inp"
+                        placeholder="Document body (supports markdown formatting with ## headings)"
+                        value={newBody}
+                        onChange={e => setNewBody(e.target.value)}
+                        rows={8}
+                        style={{ resize: 'vertical', fontFamily: 'var(--font-mono)', fontSize: '13px' }}
+                    />
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                    <button className="btn btn-primary" onClick={addDoc} disabled={!newTitle.trim() || !newBody.trim()}>
                         Add Document
                     </button>
                     <button
                         className="btn"
                         onClick={indexDocs}
                         disabled={indexing || docs.length === 0}
-                        style={{ background: docs.length > 0 ? '#0070f3' : '#999' }}
                     >
                         {indexing ? 'Indexing...' : 'Index All Documents'}
                     </button>
@@ -191,66 +190,69 @@ const TextDocs = () => {
             </div>
 
             {docs.length === 0 && (
-                <div className="card" style={{ textAlign: 'center', color: '#666' }}>
-                    <p>No documents yet. Add your first document above.</p>
+                <div className="card">
+                    <div className="empty-state">
+                        <div className="e-icon">▦</div>
+                        <div className="e-title">No documents yet</div>
+                        <div className="e-desc">Add your first document above.</div>
+                    </div>
                 </div>
             )}
 
             {docs.map(doc => (
-                <div key={doc.doc_id} className="card" style={{ padding: '1.25rem 1.5rem' }}>
+                <div key={doc.doc_id} className="card card-pad" style={{ marginBottom: '8px' }}>
                     {editingId === doc.doc_id ? (
                         <div>
-                            <input
-                                className="input"
-                                value={editTitle}
-                                onChange={e => setEditTitle(e.target.value)}
-                                placeholder="Title"
-                            />
-                            <textarea
-                                className="input"
-                                value={editBody}
-                                onChange={e => setEditBody(e.target.value)}
-                                rows={8}
-                                style={{ resize: 'vertical', fontFamily: 'monospace' }}
-                            />
-                            <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                <button className="btn" onClick={() => updateDoc(doc.doc_id)} disabled={!editTitle.trim() || !editBody.trim()}>
+                            <div className="field">
+                                <input
+                                    className="inp"
+                                    value={editTitle}
+                                    onChange={e => setEditTitle(e.target.value)}
+                                    placeholder="Title"
+                                />
+                            </div>
+                            <div className="field">
+                                <textarea
+                                    className="inp"
+                                    value={editBody}
+                                    onChange={e => setEditBody(e.target.value)}
+                                    rows={8}
+                                    style={{ resize: 'vertical', fontFamily: 'var(--font-mono)', fontSize: '13px' }}
+                                    placeholder="Document body"
+                                />
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <button className="btn btn-primary" onClick={() => updateDoc(doc.doc_id)} disabled={!editTitle.trim() || !editBody.trim()}>
                                     Save
                                 </button>
-                                <button className="btn" style={{ background: '#666' }} onClick={() => setEditingId(null)}>
+                                <button className="btn" onClick={() => setEditingId(null)}>
                                     Cancel
                                 </button>
                             </div>
                         </div>
                     ) : (
                         <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                <div style={{ flex: 1 }}>
-                                    <p style={{ fontWeight: 600, margin: '0 0 0.5rem', fontSize: '16px' }}>{doc.title}</p>
-                                    <p style={{ margin: 0, color: '#555', whiteSpace: 'pre-wrap', fontSize: '14px', maxHeight: '120px', overflow: 'hidden' }}>
-                                        {doc.body.length > 500 ? doc.body.slice(0, 500) + '...' : doc.body}
-                                    </p>
-                                </div>
-                                <div style={{ display: 'flex', gap: '0.5rem', marginLeft: '1rem', flexShrink: 0 }}>
-                                    <button
-                                        className="btn"
-                                        style={{ background: '#ff9100' }}
-                                        onClick={() => {
-                                            setEditingId(doc.doc_id);
-                                            setEditTitle(doc.title);
-                                            setEditBody(doc.body);
-                                        }}
-                                    >
-                                        Edit
-                                    </button>
-                                    <button
-                                        className="btn"
-                                        style={{ background: '#ff4444' }}
-                                        onClick={() => deleteDoc(doc.doc_id)}
-                                    >
-                                        Delete
-                                    </button>
-                                </div>
+                            <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '6px' }}>{doc.title}</div>
+                            <div style={{ fontSize: '13px', color: 'var(--body)', whiteSpace: 'pre-wrap', maxHeight: '100px', overflow: 'hidden' }}>
+                                {doc.body.length > 500 ? doc.body.slice(0, 500) + '...' : doc.body}
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                                <button
+                                    className="btn btn-sm"
+                                    onClick={() => {
+                                        setEditingId(doc.doc_id);
+                                        setEditTitle(doc.title);
+                                        setEditBody(doc.body);
+                                    }}
+                                >
+                                    Edit
+                                </button>
+                                <button
+                                    className="btn btn-sm btn-danger"
+                                    onClick={() => deleteDoc(doc.doc_id)}
+                                >
+                                    Delete
+                                </button>
                             </div>
                         </div>
                     )}
