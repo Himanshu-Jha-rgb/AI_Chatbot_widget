@@ -45,11 +45,9 @@ async def list_knowledge_gaps(
     if status != "all":
         query_filter["status"] = status
 
-    gaps = await db.knowledge_gaps.find(query_filter) \
-        .sort("count", -1) \
-        .skip(skip) \
-        .limit(limit) \
-        .to_list(limit)
+    cursor = db.knowledge_gaps.find(query_filter).sort("count", -1)
+    all_gaps = await cursor.to_list(length=1000)
+    gaps = all_gaps[skip:skip + limit]
 
     faqs = await db.faqs.find({"tenant_id": tenant_id}).to_list(1000)
 
