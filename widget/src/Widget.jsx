@@ -99,12 +99,18 @@ function useStyleInjection() {
 }
 
 function useIsMobile(breakpoint = 768) {
+    const checkMobile = () => {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const aspectRatio = h / w;
+        return w <= breakpoint || (w <= 1024 && aspectRatio > 1.7);
+    };
     const [isMobile, setIsMobile] = useState(
-        typeof window !== 'undefined' ? window.innerWidth <= breakpoint : false
+        typeof window !== 'undefined' ? checkMobile() : false
     );
     useEffect(() => {
         const mq = window.matchMedia(`(max-width: ${breakpoint}px)`);
-        const check = () => setIsMobile(window.innerWidth <= breakpoint);
+        const check = () => setIsMobile(checkMobile());
         mq.addEventListener('change', check);
         window.addEventListener('resize', check);
         check();
@@ -328,30 +334,65 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
             }}
         >
             {isOpen ? (
-                <div style={{
-                    width: isMobile ? '100vw' : '380px',
-                    height: isMobile ? '100dvh' : '560px',
-                    position: isMobile ? 'fixed' : 'relative',
-                    bottom: isMobile ? 0 : undefined,
-                    right: isMobile ? 0 : undefined,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    borderRadius: isMobile ? 0 : '24px',
-                    overflow: 'hidden',
-                    background: palette.containerBg,
-                    backdropFilter: isMobile ? 'none' : 'blur(16px) saturate(180%)',
-                    WebkitBackdropFilter: isMobile ? 'none' : 'blur(16px) saturate(180%)',
-                    border: isMobile ? 'none' : `1px solid ${palette.containerBorder}`,
-                    boxShadow: isMobile
-                        ? 'none'
-                        : isDark
-                            ? '0 12px 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04)'
-                            : '0 12px 40px rgba(0,0,0,0.12), 0 0 0 1px rgba(255,255,255,0.6)',
-                    animation: isMobile
-                        ? 'cwSlideUpMobile 0.3s cubic-bezier(0.16,1,0.3,1)'
-                        : 'cwFadeIn 0.3s cubic-bezier(0.16,1,0.3,1)',
-                    fontFamily: font,
-                }}>
+                <>
+                    {/* Mobile backdrop overlay */}
+                    {isMobile && (
+                        <div
+                            onClick={() => setIsOpen(false)}
+                            style={{
+                                position: 'fixed',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                background: 'rgba(0,0,0,0.5)',
+                                zIndex: 2147483646,
+                                animation: 'cwFadeIn 0.2s ease-out',
+                            }}
+                        />
+                    )}
+                    <div style={{
+                        width: isMobile ? '100vw' : '380px',
+                        height: isMobile ? '75dvh' : '560px',
+                        position: isMobile ? 'fixed' : 'relative',
+                        bottom: isMobile ? 0 : undefined,
+                        right: isMobile ? 0 : undefined,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        borderRadius: isMobile ? '24px 24px 0 0' : '24px',
+                        overflow: 'hidden',
+                        background: palette.containerBg,
+                        backdropFilter: isMobile ? 'none' : 'blur(16px) saturate(180%)',
+                        WebkitBackdropFilter: isMobile ? 'none' : 'blur(16px) saturate(180%)',
+                        border: isMobile ? 'none' : `1px solid ${palette.containerBorder}`,
+                        boxShadow: isMobile
+                            ? '0 -4px 24px rgba(0,0,0,0.15)'
+                            : isDark
+                                ? '0 12px 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04)'
+                                : '0 12px 40px rgba(0,0,0,0.12), 0 0 0 1px rgba(255,255,255,0.6)',
+                        animation: isMobile
+                            ? 'cwSlideUpMobile 0.3s cubic-bezier(0.16,1,0.3,1)'
+                            : 'cwFadeIn 0.3s cubic-bezier(0.16,1,0.3,1)',
+                        fontFamily: font,
+                        zIndex: 2147483647,
+                    }}>
+
+                    {/* Mobile drag handle */}
+                    {isMobile && (
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            padding: '12px 0 4px',
+                            background: palette.headerBg,
+                        }}>
+                            <div style={{
+                                width: '36px',
+                                height: '4px',
+                                borderRadius: '2px',
+                                background: 'rgba(255,255,255,0.4)',
+                            }} />
+                        </div>
+                    )}
 
                     {/* Header */}
                     <div style={{
@@ -849,6 +890,7 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
                         </button>
                     </div>
                 </div>
+                </>
             ) : (
                 /* Floating Action Button */
                 <button
