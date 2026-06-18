@@ -107,20 +107,22 @@ async def crawl_task(tenant_id: str, seed_url: str, job_id: str, source_id: str 
 
 async def _crawl_with_firecrawl(seed_url: str) -> list[dict]:
     headers = {"Authorization": f"Bearer {settings.FIRECRAWL_API_KEY}"}
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(connect=60.0, read=120.0, write=60.0, pool=60.0)) as client:
         crawl_response = await client.post(
-            "https://api.firecrawl.dev/v1/crawl",
+            "https://api.firecrawl.dev/v2/crawl",
             headers=headers,
             json={
                 "url": seed_url,
                 "limit": MAX_PAGES,
                 "scrapeOptions": {
                     "formats": ["markdown"],
-                    "waitFor": 5000,
+                    "actions": [
+                        {"type": "wait", "milliseconds": 10000},
+                    ],
                 }
             }
         )
-        print(f"[FIRECRAWL] POST /v1/crawl status={crawl_response.status_code}")
+        print(f"[FIRECRAWL] POST /v2/crawl status={crawl_response.status_code}")
         print(f"[FIRECRAWL] Response: {crawl_response.text[:500]}")
         crawl_response.raise_for_status()
         firecrawl_job_id = crawl_response.json()["id"]
@@ -134,9 +136,17 @@ async def _crawl_with_firecrawl(seed_url: str) -> list[dict]:
             await asyncio.sleep(5)
             elapsed += 5
             status_response = await client.get(
-                f"https://api.firecrawl.dev/v1/crawl/{firecrawl_job_id}",
+                f"https://api.firecrawl.dev/v2/crawl/{firecrawl_job_id}",
                 headers=headers
             )
+            if status_response.status_code == 429:
+                print(f"[FIRECRAWL] Poll ({elapsed}s): Rate limited, retrying in 10s...")
+                await asyncio.sleep(10)
+                elapsed += 10
+                continue
+            if not status_response.text.strip():
+                print(f"[FIRECRAWL] Poll ({elapsed}s): Empty response, retrying in 5s...")
+                continue
             status_data = status_response.json()
             print(f"[FIRECRAWL] Poll ({elapsed}s): status={status_data.get('status')}, total={status_data.get('total')}, completed={status_data.get('completed')}, failed={status_data.get('failed')}")
 
