@@ -117,6 +117,7 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
 
     # Rewrite query and classify (greeting vs searchable vs out-of-scope)
     search_query, needs_search, is_out_of_scope = await _rewrite_search_query(req.query)
+    print(f"[CHAT] query='{req.query}' → search_query='{search_query}' needs_search={needs_search} is_out_of_scope={is_out_of_scope}")
 
     if is_out_of_scope:
         answer = f"I'm here to answer questions about {domain}. I don't have information about that."
@@ -125,6 +126,7 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
 
     if needs_search:
         chunks = await search_chunks(tenant_id, search_query)
+        print(f"[CHAT] search_chunks returned {len(chunks)} chunks")
     else:
         chunks = []
 
@@ -342,18 +344,20 @@ _QUERY_REWRITE_SYSTEM_PROMPT = (
     "   → No search needed — the chatbot can respond directly.\n\n"
 
     "2. Reply OUT_OF_SCOPE\n"
-    "   → ONLY when the query is something NO website chatbot should answer:\n"
+    "   → ONLY when the query is clearly about something that has NOTHING to do with the company or its business:\n"
     "     - Famous people (e.g. 'Virat Kohli kaun hai')\n"
     "     - Coding problems (e.g. 'LeetCode two sum solution')\n"
     "     - General knowledge / trivia (e.g. 'capital of France')\n"
     "     - Weather, news, jokes, entertainment\n"
-    "     - Anything completely unrelated to a business website\n"
-    "   → Do NOT use OUT_OF_SCOPE for vague queries like 'mujhe kuchh janana h', "
-    "'batao', 'kya hai' — these could be about the company.\n\n"
+    "     - Politics, sports scores, unrelated current events\n"
+    "   → CRITICAL: If the query could POSSIBLY be about the company, its programs, eligibility, "
+    "courses, exams, schedules, fees, scholarships, results, or any business-related topic, "
+    "ALWAYS classify as a search query — NEVER as OUT_OF_SCOPE.\n"
+    "   → When in doubt, classify as a search query.\n\n"
 
     "3. Otherwise → Rewrite as a search query\n"
-    "   → If the query is about the company, its products, services, pricing, support, "
-    "installation, or anything a business website chatbot should answer:\n"
+    "   → If the query is about the company, its programs, eligibility, products, services, "
+    "pricing, support, installation, or anything a business website chatbot should answer:\n"
     "   → Translate to English if needed, then rewrite as a concise English search query.\n"
     "   → Respond with ONLY the rewritten query — no explanation, no quotes, no preamble.\n\n"
 
