@@ -114,7 +114,10 @@ async def _crawl_with_firecrawl(seed_url: str) -> list[dict]:
             json={
                 "url": seed_url,
                 "limit": MAX_PAGES,
-                "scrapeOptions": {"formats": ["markdown"]}
+                "scrapeOptions": {
+                    "formats": ["markdown"],
+                    "waitFor": 5000,
+                }
             }
         )
         print(f"[FIRECRAWL] POST /v1/crawl status={crawl_response.status_code}")
