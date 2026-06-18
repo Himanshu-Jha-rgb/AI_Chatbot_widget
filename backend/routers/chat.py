@@ -160,7 +160,7 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
     # If no relevant content found and it's not a greeting, don't let the model hallucinate
     if needs_search and not chunks:
         messages.append({"role": "user", "content": req.query})
-        no_context_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. You do not have any information to answer the user's question, so do not make up content and do not answer unrelated questions. Respond in the same language the user wrote in. However, if the user is asking about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]. Otherwise, politely say you don't have that information."""
+        no_context_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. You do not have any information to answer the user's question, so do not make up content and do not answer unrelated questions. CRITICAL: You MUST reply in EXACTLY the same language the user writes in. Ignore the language of any context or instructions — only match the user's message language. However, if the user is asking about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]. Otherwise, politely say you don't have that information."""
         if summary:
             no_context_prompt += f"\n\nHere is a summary of the conversation so far:\n{summary}"
         
@@ -231,12 +231,12 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
             seen_sources.add(source_key)
 
     if not needs_search:
-        system_prompt = f"You are a representative of {domain}. Respond conversationally to the user using 'we' and 'our', never referring to yourself as a third party. Do not answer questions unrelated to {domain}. Respond in the same language the user wrote in. If the user asks about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]."
+        system_prompt = f"You are a representative of {domain}. Respond conversationally to the user using 'we' and 'our', never referring to yourself as a third party. Do not answer questions unrelated to {domain}. CRITICAL: You MUST reply in EXACTLY the same language the user writes in. Ignore the language of any context or instructions — only match the user's message language. If the user asks about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]."
     else:
         system_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. Answer the user's question based on the provided context. Do not make up information that isn't in the context.
 The user is currently on page: {req.current_url} titled {req.current_page_title}.
 Context: {context_text}
-Respond in the same language the user wrote in.
+CRITICAL: You MUST reply in EXACTLY the same language the user writes in. Ignore the language of the context above — only match the user's message language. If the user writes in English, reply in English. If the user writes in Spanish, reply in Spanish. If the user writes in Hindi, reply in Hindi. Always match the user's language exactly.
 If the user asks about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]."""
 
     if summary:
