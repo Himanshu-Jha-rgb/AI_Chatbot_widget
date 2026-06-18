@@ -1,9 +1,7 @@
-import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { Widget } from './Widget';
 
 const init = () => {
-
     const devRoot = document.getElementById('root');
     if (devRoot) {
         const root = createRoot(devRoot);
@@ -11,13 +9,12 @@ const init = () => {
         return;
     }
     
-
-    let scriptTag = document.currentScript;
+    let scriptTag = document.currentScript as HTMLScriptElement | null;
     if (!scriptTag) {
         const scripts = document.getElementsByTagName('script');
         for (let i = 0; i < scripts.length; i++) {
             if (scripts[i].src.includes('widget.js')) {
-                scriptTag = scripts[i];
+                scriptTag = scripts[i] as HTMLScriptElement;
                 break;
             }
         }

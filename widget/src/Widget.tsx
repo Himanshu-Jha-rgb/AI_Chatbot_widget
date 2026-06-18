@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 
 const ACCENT_FALLBACK = '#4F46E5';
 
-function luminance(r, g, b) {
+function luminance(r: number, g: number, b: number): number {
     const a = [r, g, b].map(v => {
         v /= 255;
         return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
@@ -12,13 +12,19 @@ function luminance(r, g, b) {
     return 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2];
 }
 
-function parseRgb(str) {
+function parseRgb(str: string): [number, number, number] | null {
     const m = str.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
     return m ? [parseInt(m[1]), parseInt(m[2]), parseInt(m[3])] : null;
 }
 
-function useHostTheme() {
-    const [theme, setTheme] = useState({
+interface ThemeState {
+    accent: string;
+    font: string;
+    isDark: boolean;
+}
+
+function useHostTheme(): ThemeState {
+    const [theme, setTheme] = useState<ThemeState>({
         accent: ACCENT_FALLBACK,
         font: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
         isDark: false,
@@ -53,12 +59,12 @@ function useHostTheme() {
         } catch (_) {
             // Host environment blocked access — use defaults
         }
-    }, []);
+    }, [theme.font]);
 
     return theme;
 }
 
-function useStyleInjection() {
+function useStyleInjection(): void {
     useEffect(() => {
         const id = 'cw-injected-styles';
         if (document.getElementById(id)) return;
@@ -98,8 +104,8 @@ function useStyleInjection() {
     }, []);
 }
 
-function useIsMobile() {
-    const [isMobile, setIsMobile] = useState(() => {
+function useIsMobile(): boolean {
+    const [isMobile, setIsMobile] = useState<boolean>(() => {
         if (typeof window === 'undefined') return false;
         const ua = navigator.userAgent || '';
         const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CREW/i;
@@ -123,7 +129,12 @@ function useIsMobile() {
     return isMobile;
 }
 
-function TypingIndicator({ accent, isDark }) {
+interface TypingIndicatorProps {
+    accent: string;
+    isDark: boolean;
+}
+
+function TypingIndicator({ accent, isDark }: TypingIndicatorProps) {
     return (
         <div style={{
             alignSelf: 'flex-start',
@@ -154,25 +165,43 @@ function TypingIndicator({ accent, isDark }) {
     );
 }
 
-export const Widget = ({ apiKey, apiBaseUrl }) => {
+interface Source {
+    section_title?: string;
+    title?: string;
+    section_path?: string;
+    url?: string;
+}
+
+interface Message {
+    role: 'user' | 'assistant';
+    content: string;
+    messageId?: string;
+    sources?: Source[];
+    showEnquiryForm?: boolean;
+    enquirySubmitted?: boolean;
+    feedback?: 'like' | 'dislike' | null;
+}
+
+interface WidgetProps {
+    apiKey: string;
+    apiBaseUrl?: string;
+}
+
+export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
     const [isOpen, setIsOpen] = useState(false);
-    const [messages, setMessages] = useState([]);
+    const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [formData, setFormData] = useState({ name: '', email: '', phone: '' });
-    const [themeName, setThemeName] = useState('default');
-    const [suggestedQuestions, setSuggestedQuestions] = useState([]);
-    const messagesEndRef = useRef(null);
+        const [formData, setFormData] = useState({ name: '', email: '', phone: '' });
+    const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useStyleInjection();
     const hostTheme = useHostTheme();
     const isMobile = useIsMobile();
 
-    const themes = {
-        default: { headerBg: '#0070f3', primary: '#0070f3', headerText: '#fff' },
-        nialabs: { headerBg: '#0f203a', primary: '#0d6efd', headerText: '#fff' },
-    };
-    const currentTheme = themes[themeName] || themes.default;
+
+ 
 
     const accent = hostTheme.accent;
     const isDark = hostTheme.isDark;
@@ -181,7 +210,7 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
     const widgetVars = useMemo(() => ({
         '--widget-accent': accent,
         '--widget-font': font,
-    }), [accent, font]);
+    }), [accent, font]) as React.CSSProperties;
 
     const palette = useMemo(() => ({
         containerBg: isDark ? 'rgba(18,18,24,0.95)' : 'rgba(255,255,255,0.88)',
@@ -209,7 +238,6 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
         const fetchConfig = async () => {
             try {
                 const config = await getWidgetConfig(apiKey, apiBaseUrl);
-                if (config?.theme) setThemeName(config.theme);
                 if (config?.suggested_questions) setSuggestedQuestions(config.suggested_questions);
             } catch (err) {
                 console.error("Failed to fetch widget config", err);
@@ -231,20 +259,20 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
         }));
     }, []);
 
-    const handleSend = useCallback(async (text) => {
+    const handleSend = useCallback(async (text?: string) => {
         const queryText = text || input.trim();
         if (!queryText) return;
 
         clearEnquiryForms();
 
-        const userMsg = { role: 'user', content: queryText };
+        const userMsg: Message = { role: 'user', content: queryText };
         setMessages(prev => [...prev, userMsg]);
         setInput('');
         setIsLoading(true);
 
         try {
             const res = await chat(queryText, window.location.href, document.title, apiKey, apiBaseUrl);
-            const botMsg = {
+            const botMsg: Message = {
                 role: 'assistant',
                 messageId: res.message_id,
                 content: res.answer,
@@ -263,7 +291,7 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
         }
     }, [input, apiKey, apiBaseUrl, clearEnquiryForms]);
 
-    const handleEnquirySubmit = useCallback(async (msgIndex) => {
+    const handleEnquirySubmit = useCallback(async (msgIndex: number) => {
         const { name, email, phone } = formData;
         if (!name.trim() || !email.trim()) return;
 
@@ -294,7 +322,7 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
         }
     }, [formData, messages, apiKey, apiBaseUrl]);
 
-    const handleFeedback = useCallback(async (msgIndex, rating) => {
+    const handleFeedback = useCallback(async (msgIndex: number, rating: 'like' | 'dislike') => {
         const msg = messages[msgIndex];
         if (!msg || !msg.messageId || msg.feedback === rating) return;
 
@@ -313,7 +341,7 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
         }
     }, [messages, apiKey, apiBaseUrl]);
 
-    const handleKeyDown = useCallback((e) => {
+    const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSend();
@@ -703,7 +731,7 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
                                     }}>
                                         <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: palette.subtleText, fontWeight: 500 }}>
                                             Leave your details and we'll get back to you:
-                                        </p>
+                                         </p>
                                         <input
                                             type="text"
                                             placeholder="Your Name *"
