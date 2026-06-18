@@ -19,6 +19,8 @@ def normalize_url(url: str) -> str:
     return url.rstrip("/")
 
 async def crawl_task(tenant_id: str, seed_url: str, job_id: str, source_id: str = ""):
+    print(f"[CRAWL {job_id}] Starting crawl for seed_url={seed_url}")
+
     await db.crawl_jobs.update_one(
         {"job_id": job_id},
         {"$set": {
@@ -33,6 +35,8 @@ async def crawl_task(tenant_id: str, seed_url: str, job_id: str, source_id: str 
         if not settings.FIRECRAWL_API_KEY:
             raise ValueError("FIRECRAWL_API_KEY is not configured")
 
+        print(f"[CRAWL {job_id}] FIRECRAWL_API_KEY is set (len={len(settings.FIRECRAWL_API_KEY)})")
+
         # Purge all old data for this site before re-crawling
         old_jobs = await db.crawl_jobs.find(
             {"tenant_id": tenant_id, "job_id": {"$ne": job_id}},
@@ -40,19 +44,23 @@ async def crawl_task(tenant_id: str, seed_url: str, job_id: str, source_id: str 
         ).to_list(length=100)
         old_crawl_ids = [j["job_id"] for j in old_jobs if normalize_url(j.get("seed_url", "")) == seed_url]
         if old_crawl_ids:
+            print(f"[CRAWL {job_id}] Purging {len(old_crawl_ids)} old crawl jobs")
             await db.chunks.delete_many({"tenant_id": tenant_id, "crawl_id": {"$in": old_crawl_ids}})
             await db.parents.delete_many({"tenant_id": tenant_id, "crawl_id": {"$in": old_crawl_ids}})
             await db.pages.delete_many({"tenant_id": tenant_id, "crawl_id": {"$in": old_crawl_ids}})
 
         pages = await _crawl_with_firecrawl(seed_url)
+        print(f"[CRAWL {job_id}] Firecrawl returned {len(pages)} pages")
 
         pages_found = 0
         chunks_created = 0
         embedding_errors = 0
 
-        for page in pages:
+        for i, page in enumerate(pages):
+            print(f"[CRAWL {job_id}] Processing page {i+1}/{len(pages)}: {page.get('metadata', {}).get('sourceURL', 'unknown')}")
             result = await _index_page(tenant_id, job_id, page, source_id)
             if not result:
+                print(f"[CRAWL {job_id}] Page {i+1} skipped (no content or too short)")
                 continue
 
             chunks_created += result["chunks_created"]
@@ -69,6 +77,7 @@ async def crawl_task(tenant_id: str, seed_url: str, job_id: str, source_id: str 
                 }}
             )
 
+        print(f"[CRAWL {job_id}] Done. pages_found={pages_found}, chunks_created={chunks_created}, embedding_errors={embedding_errors}")
         await db.crawl_jobs.update_one(
             {"job_id": job_id},
             {"$set": {
@@ -84,7 +93,9 @@ async def crawl_task(tenant_id: str, seed_url: str, job_id: str, source_id: str 
             asyncio.create_task(generate_suggested_questions(tenant_id))
 
     except Exception as e:
-        print(f"Crawl job {job_id} failed: {e}")
+        print(f"[CRAWL {job_id}] FAILED: {e}")
+        import traceback
+        traceback.print_exc()
         await db.crawl_jobs.update_one(
             {"job_id": job_id},
             {"$set": {
@@ -106,8 +117,11 @@ async def _crawl_with_firecrawl(seed_url: str) -> list[dict]:
                 "scrapeOptions": {"formats": ["markdown"]}
             }
         )
+        print(f"[FIRECRAWL] POST /v1/crawl status={crawl_response.status_code}")
+        print(f"[FIRECRAWL] Response: {crawl_response.text[:500]}")
         crawl_response.raise_for_status()
         firecrawl_job_id = crawl_response.json()["id"]
+        print(f"[FIRECRAWL] Job ID: {firecrawl_job_id}")
 
         # Timeout after 8 minutes — Render free tier kills processes after ~15 min idle
         max_wait = 480
@@ -120,13 +134,16 @@ async def _crawl_with_firecrawl(seed_url: str) -> list[dict]:
                 f"https://api.firecrawl.dev/v1/crawl/{firecrawl_job_id}",
                 headers=headers
             )
-            status_response.raise_for_status()
             status_data = status_response.json()
+            print(f"[FIRECRAWL] Poll ({elapsed}s): status={status_data.get('status')}, total={status_data.get('total')}, completed={status_data.get('completed')}, failed={status_data.get('failed')}")
 
             if status_data["status"] == "completed":
-                return status_data.get("data", [])
+                data = status_data.get("data", [])
+                print(f"[FIRECRAWL] Completed with {len(data)} pages")
+                return data
             if status_data["status"] == "failed":
-                raise RuntimeError("Firecrawl job failed")
+                print(f"[FIRECRAWL] Job failed: {status_data}")
+                raise RuntimeError(f"Firecrawl job failed: {status_data}")
 
         raise RuntimeError(f"Firecrawl crawl timed out after {max_wait}s — job may still be running on Firecrawl")
 
@@ -141,6 +158,7 @@ async def _index_page(
     title = page.get("metadata", {}).get("title", "")
 
     if not content or len(content) < 50 or not url:
+        print(f"[INDEX] Skipping page url={url} content_len={len(content)} reason={'empty' if not content else 'too short' if len(content) < 50 else 'no url'}")
         return None
 
     doc_id = str(uuid.uuid4())
@@ -168,5 +186,3 @@ async def _index_page(
         "chunks_created": 0,
         "embedding_errors": result["embedding_errors"] or 1,
     }
-
-
