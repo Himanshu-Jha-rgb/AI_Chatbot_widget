@@ -138,6 +138,7 @@ flowchart TD
 ## Prerequisites
 - Docker & Docker Compose
 - MongoDB Atlas cluster
+- Redis server (local or hosted)
 - OpenAI API Key
 - Firecrawl API Key
 
@@ -158,6 +159,7 @@ FIRECRAWL_API_KEY=fc-your-firecrawl-api-key-here
 JWT_SECRET=your-super-secret-jwt-key
 ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 VITE_API_BASE_URL=http://localhost:8000
+REDIS_URI=redis://localhost:6379/0
 ```
 
 `VITE_API_BASE_URL` is used when building the dashboard so browser requests and generated widget snippets point to the backend.
@@ -598,6 +600,22 @@ The per-IP and per-session limits catch individual bad actors. The per-tenant li
 
 In-memory counters reset on server restart. For production at scale, replace with Redis-backed rate limiting.
 
+## Session Management & History Compaction
+
+To ensure high-performance, cost-effective conversational capability, the system integrates Redis caching alongside MongoDB storage, combined with a rolling history summarization pipeline.
+
+### 1. In-Memory Session Caching (Redis)
+- **Cache-Aside lookup**: When a chat request is received, the backend attempts to load the session history and rolling summary from Redis (`chat_session:{session_id}`).
+- **MongoDB Fallback**: If a cache miss occurs, history is retrieved from MongoDB and written back to Redis with a 1-hour TTL.
+- **Latency Optimization**: Reads bypass the database completely for active sessions, providing sub-millisecond context retrievals.
+
+### 2. Semantic Context Summarization (Compaction)
+- **Trigger**: When the conversation history reaches 10 messages (5 complete turns).
+- **Pruning**: The last 4 messages (2 turns) are kept in full fidelity to handle immediate references (pronouns, follow-ups).
+- **Summarization**: The older 6 messages are aggregated with any existing summary into a new, consolidated rolling summary using `gpt-4o-mini`.
+- **Database Cap**: By trimming the active `messages` array down to 4 items and updating the document's `summary` field, MongoDB document size remains bounded at $O(1)$ size, avoiding unbounded array growth and slow updates.
+- **System Prompt Injection**: The rolling summary is automatically injected into the LLM system prompt on subsequent turns.
+
 ## Key Design Decisions
 
 ### Query Rewriting (LLM-based)
@@ -625,6 +643,7 @@ If search returns zero results for a non-greeting query, the system returns *"I 
 |---|---|
 | Backend | Python 3.12+, FastAPI, Uvicorn |
 | Database | MongoDB Atlas (Motor async driver) |
+| Cache | Redis (redis-py async client) |
 | Embeddings | OpenAI `text-embedding-3-small` |
 | Chat LLM | OpenAI `gpt-4o` |
 | Query Rewriting | OpenAI `gpt-4o-mini` |

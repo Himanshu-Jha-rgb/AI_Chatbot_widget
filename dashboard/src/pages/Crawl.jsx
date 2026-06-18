@@ -142,7 +142,7 @@ const Crawl = () => {
                   <tr key={i}>
                     <td style={{ maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{job.seed_url}</td>
                     <td>
-                      <span className={`pill ${job.status === 'done' ? 'pill-ok' : job.status === 'failed' ? 'pill-danger' : 'pill-warn'}`} style={{ textTransform: 'capitalize' }}>
+                      <span className={`pill ${job.status === 'done' ? 'pill-ok' : job.status === 'failed' || job.status === 'purged' ? 'pill-danger' : 'pill-warn'}`} style={{ textTransform: 'capitalize' }}>
                         {job.status}
                       </span>
                     </td>

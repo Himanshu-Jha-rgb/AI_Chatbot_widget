@@ -9,6 +9,8 @@ import time
 import numpy as np
 from collections import defaultdict, deque
 from datetime import datetime, timezone
+import json
+from core.redis import redis_client
 
 router = APIRouter(tags=["chat"])
 
@@ -126,14 +128,42 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
     else:
         chunks = []
 
-    # Retrieve conversation history
-    session = await db.conversations.find_one({"session_id": session_id})
-    messages = session["messages"] if session else []
+    # --- Retrieve conversation history (with Redis cache + Mongo fallback) ---
+    cache_key = f"chat_session:{session_id}"
+    cached_data = None
+    try:
+        cached_data_str = await redis_client.get(cache_key)
+        if cached_data_str:
+            cached_data = json.loads(cached_data_str)
+    except Exception as e:
+        print(f"Redis get failed: {e}")
+
+    if cached_data:
+        summary = cached_data.get("summary", "")
+        messages = cached_data.get("messages", [])
+    else:
+        # Fallback to MongoDB
+        session = await db.conversations.find_one({"session_id": session_id})
+        if session:
+            summary = session.get("summary", "")
+            messages = session.get("messages", [])
+        else:
+            summary = ""
+            messages = []
+        
+        # Populate Redis cache
+        try:
+            await redis_client.setex(cache_key, 3600, json.dumps({"summary": summary, "messages": messages}))
+        except Exception as e:
+            print(f"Redis set failed: {e}")
 
     # If no relevant content found and it's not a greeting, don't let the model hallucinate
     if needs_search and not chunks:
         messages.append({"role": "user", "content": req.query})
         no_context_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. You do not have any information to answer the user's question, so do not make up content and do not answer unrelated questions. Respond in the same language the user wrote in. However, if the user is asking about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]. Otherwise, politely say you don't have that information."""
+        if summary:
+            no_context_prompt += f"\n\nHere is a summary of the conversation so far:\n{summary}"
+        
         api_messages = [{"role": "system", "content": no_context_prompt}] + messages[-MAX_HISTORY:]
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
@@ -144,11 +174,32 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
         if show_form:
             answer = answer.replace("[ENQUIRY_FORM]", "").strip()
         messages.append({"role": "assistant", "content": answer})
+        
+        # --- Context Summarization Compaction ---
+        if len(messages) >= 10:
+            messages_to_keep = messages[-4:]
+            messages_to_summarize = messages[:-4]
+            summary = await _summarize_past_context(summary, messages_to_summarize)
+            messages = messages_to_keep
+
+        # Update MongoDB (keeps messages capped at max 10 elements)
         await db.conversations.update_one(
             {"session_id": session_id},
-            {"$set": {"tenant_id": tenant_id, "current_url": req.current_url, "messages": messages}},
+            {"$set": {
+                "tenant_id": tenant_id,
+                "current_url": req.current_url,
+                "summary": summary,
+                "messages": messages
+            }},
             upsert=True
         )
+
+        # Update Redis cache
+        try:
+            await redis_client.setex(cache_key, 3600, json.dumps({"summary": summary, "messages": messages}))
+        except Exception as e:
+            print(f"Redis set failed: {e}")
+
         await db.visitors.update_one(
             {"session_id": session_id},
             {"$addToSet": {"conversation_ids": session_id},
@@ -188,6 +239,9 @@ Context: {context_text}
 Respond in the same language the user wrote in.
 If the user asks about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]."""
 
+    if summary:
+        system_prompt += f"\n\nHere is a summary of the conversation so far:\n{summary}"
+
     messages.append({"role": "user", "content": req.query})
 
     # Send only the last MAX_HISTORY messages to control token usage.
@@ -207,11 +261,30 @@ If the user asks about pricing, demo, purchasing, or wants to be contacted, offe
 
     messages.append({"role": "assistant", "content": answer})
 
+    # --- Context Summarization Compaction ---
+    if len(messages) >= 10:
+        messages_to_keep = messages[-4:]
+        messages_to_summarize = messages[:-4]
+        summary = await _summarize_past_context(summary, messages_to_summarize)
+        messages = messages_to_keep
+
+    # Update MongoDB (keeps messages capped at max 10 elements)
     await db.conversations.update_one(
         {"session_id": session_id},
-        {"$set": {"tenant_id": tenant_id, "current_url": req.current_url, "messages": messages}},
+        {"$set": {
+            "tenant_id": tenant_id,
+            "current_url": req.current_url,
+            "summary": summary,
+            "messages": messages
+        }},
         upsert=True
     )
+
+    # Update Redis cache
+    try:
+        await redis_client.setex(cache_key, 3600, json.dumps({"summary": summary, "messages": messages}))
+    except Exception as e:
+        print(f"Redis set failed: {e}")
 
     # Track conversation and message count on visitor
     await db.visitors.update_one(
@@ -332,6 +405,41 @@ async def _rewrite_search_query(query: str) -> tuple[str, bool, bool]:
     except Exception:
         # If the LLM call fails, fall back to the original query and treat as searchable
         return q, True, False
+
+
+async def _summarize_past_context(previous_summary: str, messages_to_summarize: list[dict]) -> str:
+    """Summarize older chat history to save tokens and manage window context."""
+    formatted_history = "\n".join([
+        f"{'Visitor' if msg['role'] == 'user' else 'Bot'}: {msg['content']}"
+        for msg in messages_to_summarize
+    ])
+    
+    prompt = (
+        "You are an AI assistant helping a website chatbot maintain its context. "
+        "Summarize the following chat history between a Visitor and a Bot. "
+        "Focus on the visitor's core intent, questions asked, and key information provided. "
+        "Do not lose track of important customer details (like names, choices, or issues). "
+        "Keep the summary concise (under 80 words) and professional.\n\n"
+    )
+    if previous_summary:
+        prompt += f"Previous Summary:\n{previous_summary}\n\n"
+    
+    prompt += f"New Conversation Segment:\n{formatted_history}\n\nNew Summary:"
+    
+    try:
+        resp = await openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that summarizes chat history segments."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=150,
+            temperature=0.3
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Failed to summarize chat history: {e}")
+        return previous_summary
 
 
 async def _log_knowledge_gap(tenant_id: str, query: str, url: str, gap_type: str, message_id: str):

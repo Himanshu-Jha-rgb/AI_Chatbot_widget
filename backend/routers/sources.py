@@ -167,8 +167,11 @@ async def delete_crawl_source(
     await db.parents.delete_many({"tenant_id": tenant_id, "crawl_id": job_id})
     await db.pages.delete_many({"tenant_id": tenant_id, "crawl_id": job_id})
 
-    # Delete the crawl job record
-    await db.crawl_jobs.delete_one({"tenant_id": tenant_id, "job_id": job_id})
+    # Mark crawl job as purged (keep record for history)
+    await db.crawl_jobs.update_one(
+        {"tenant_id": tenant_id, "job_id": job_id},
+        {"$set": {"status": "purged", "pages_found": 0, "chunks_created": 0}}
+    )
 
     return {"status": "deleted", "job_id": job_id}
 
