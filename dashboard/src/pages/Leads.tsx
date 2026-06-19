@@ -105,7 +105,7 @@ const Leads = () => {
                       <td className="px-6 py-4 text-slate-400 max-w-xs truncate" title={lead.message}>
                         <span className="flex items-center gap-1.5">
                           <MessageSquare size={14} className="text-slate-500 flex-shrink-0" />
-                          <span className="truncate">{lead.message || '-'}</span>
+                          <span className="truncate text-wrap">{lead.message || '-'}</span>
                         </span>
                       </td>
                       <td className="px-6 py-4 text-slate-400">

@@ -9,11 +9,10 @@ import {
   Settings, 
   LogOut,
   X,
-  Bot,
-  UserCheck
+  Bot
 } from 'lucide-react';
 import { clearSession } from '../api';
-import { useStore, UserRole } from '../store';
+import { useStore } from '../store';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -29,10 +28,6 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     clearSession();
     dispatch({ type: 'RESET_STORE' });
     navigate('/login');
-  };
-
-  const handleRoleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    dispatch({ type: 'SET_ROLE', payload: e.target.value as UserRole });
   };
 
   const navItems = [
@@ -125,22 +120,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
 
         {/* Footer Area: Role Switcher & User LogOut */}
         <div className="mt-auto space-y-4 pt-5 border-t border-slate-800">
-          {/* Role Switcher (RBAC Tester) */}
-          <div className="space-y-1.5">
-            <label className="text-xxs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-              <UserCheck size={12} className="text-violet-400" />
-              <span>Current User Role (RBAC)</span>
-            </label>
-            <select
-              value={state.role}
-              onChange={handleRoleChange}
-              className="w-full rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-300 px-3 py-2.5 font-semibold focus:outline-none focus:border-violet-600 cursor-pointer"
-            >
-              <option value="admin">Administrator</option>
-              <option value="editor">Editor / Member</option>
-              <option value="viewer">Viewer (Read-only)</option>
-            </select>
-          </div>
+
 
           {/* User profile logout chip */}
           <div className="flex items-center justify-between rounded-xl bg-slate-950 border border-slate-850 p-3.5">

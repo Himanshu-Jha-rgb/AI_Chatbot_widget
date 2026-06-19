@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
+import { privateAxios } from '../utils/axios';
+import { useStore } from '../store';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -8,10 +10,24 @@ interface LayoutProps {
 
 export const Layout = ({ children }: LayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { dispatch } = useStore();
 
   useEffect(() => {
     document.title = 'EduChat AI';
-  }, []);
+    
+    const fetchUserData = async () => {
+      try {
+        const res = await privateAxios.get('/tenants/me');
+        if (res.data && res.data.role) {
+          dispatch({ type: 'SET_ROLE', payload: res.data.role });
+        }
+      } catch (err) {
+        console.error('Failed to fetch user role on mount:', err);
+      }
+    };
+    
+    fetchUserData();
+  }, [dispatch]);
 
   return (
     <div className="flex min-h-screen bg-slate-950">
