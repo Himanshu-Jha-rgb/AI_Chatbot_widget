@@ -4,8 +4,6 @@ import { useStore, hasAccess } from '../store';
 import { KnowledgeGap, Source } from '../interfaces';
 import { 
   Sparkles, 
-  HelpCircle, 
-  Plus, 
   TrendingUp,
   X,
   Lock,

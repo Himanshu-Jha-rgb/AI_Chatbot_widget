@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { privateAxios } from '../utils/axios';
 import { useStore, hasAccess } from '../store';
-import { Globe, RefreshCw, AlertCircle, History, Play, CheckCircle2, Lock } from 'lucide-react';
+import { RefreshCw, AlertCircle, History, Play, Lock } from 'lucide-react';
 
 const Crawl = () => {
   const { state } = useStore();
@@ -65,7 +65,7 @@ const Crawl = () => {
             clearInterval(interval);
             fetchHistory();
           }
-        } catch (e) {
+        } catch {
           clearInterval(interval);
         }
       }, 5000);

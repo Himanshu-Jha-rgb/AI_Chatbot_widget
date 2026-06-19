@@ -13,27 +13,16 @@ export function FloatingButton({ accent, palette, onOpen, hasMessages }: Floatin
     <button
       onClick={onOpen}
       aria-label="Open chat"
+      className="w-[60px] h-[60px] rounded-full text-white border-none cursor-pointer flex items-center justify-center transition-all duration-200 ease-out hover:scale-108"
       style={{
-        width: '60px',
-        height: '60px',
-        borderRadius: '50%',
         background: `linear-gradient(135deg, ${accent}, ${accent}CC)`,
-        color: '#fff',
-        border: 'none',
         boxShadow: `0 4px 20px ${palette.fabShadow}`,
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        transition: 'transform 0.2s cubic-bezier(0.16,1,0.3,1), box-shadow 0.2s ease',
         animation: !hasMessages ? 'cwPulse 3s ease-in-out 2' : 'none',
       }}
       onMouseEnter={e => {
-        e.currentTarget.style.transform = 'scale(1.08)';
         e.currentTarget.style.boxShadow = `0 6px 28px ${palette.fabShadow}`;
       }}
       onMouseLeave={e => {
-        e.currentTarget.style.transform = 'scale(1)';
         e.currentTarget.style.boxShadow = `0 4px 20px ${palette.fabShadow}`;
       }}
     >

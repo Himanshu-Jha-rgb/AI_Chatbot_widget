@@ -1,115 +1,96 @@
 const DEFAULT_API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
 
 export interface ChatResponse {
-    message_id: string;
-    answer: string;
-    sources: any[];
-    show_enquiry_form?: boolean;
+  message_id: string;
+  answer: string;
+  sources: any[];
+  show_enquiry_form?: boolean;
 }
 
 export interface WidgetConfig {
-    theme?: string;
-    suggested_questions?: string[];
+  theme?: string;
+  suggested_questions?: string[];
 }
 
 export interface EnquiryData {
-    name: string;
-    email: string;
-    phone?: string;
-    message: string;
-    session_id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  message: string;
+  session_id: string;
 }
 
-export const chat = async (
-    query: string,
-    current_url: string,
-    current_page_title: string,
-    apiKey: string,
-    apiBaseUrl: string = DEFAULT_API_BASE_URL
-): Promise<ChatResponse> => {
-    const response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}/chat`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`
-        },
-        credentials: "include",
-        body: JSON.stringify({
-            query,
-            current_url,
-            current_page_title
-        })
+class ApiClient {
+  private apiKey: string = '';
+  private apiBaseUrl: string = DEFAULT_API_BASE_URL;
+
+  public init(apiKey: string, apiBaseUrl?: string) {
+    this.apiKey = apiKey;
+    if (apiBaseUrl) {
+      this.apiBaseUrl = apiBaseUrl.replace(/\/$/, "");
+    }
+  }
+
+  private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+    const headers = new Headers(options.headers);
+    if (this.apiKey) {
+      headers.set("Authorization", `Bearer ${this.apiKey}`);
+    }
+    if (options.method && options.method !== 'GET' && !headers.has('Content-Type')) {
+      headers.set("Content-Type", "application/json");
+    }
+
+    const response = await fetch(`${this.apiBaseUrl}${path}`, {
+      ...options,
+      headers,
     });
 
     if (!response.ok) {
-        throw new Error("Chat request failed");
+      throw new Error(`Request to ${path} failed with status ${response.status}`);
     }
 
     return response.json();
-};
+  }
 
-export const getWidgetConfig = async (
-    apiKey: string,
-    apiBaseUrl: string = DEFAULT_API_BASE_URL
-): Promise<WidgetConfig> => {
-    const response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}/widget/config`, {
-        method: "GET",
-        headers: {
-            "Authorization": `Bearer ${apiKey}`
-        }
+  public chat(query: string, current_url: string, current_page_title: string): Promise<ChatResponse> {
+    return this.request<ChatResponse>("/chat", {
+      method: "POST",
+      credentials: "include",
+      body: JSON.stringify({ query, current_url, current_page_title }),
     });
+  }
 
-    if (!response.ok) {
-        throw new Error("Failed to fetch widget config");
-    }
-
-    return response.json();
-};
-
-export const submitEnquiry = async (
-    data: EnquiryData,
-    apiKey: string,
-    apiBaseUrl: string = DEFAULT_API_BASE_URL
-): Promise<any> => {
-    const response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}/leads`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`
-        },
-        body: JSON.stringify(data)
+  public getWidgetConfig(): Promise<WidgetConfig> {
+    return this.request<WidgetConfig>("/widget/config", {
+      method: "GET",
     });
+  }
 
-    if (!response.ok) {
-        throw new Error("Enquiry submission failed");
-    }
-
-    return response.json();
-};
-
-export const submitFeedback = async (
-    messageId: string,
-    sessionId: string,
-    rating: 'like' | 'dislike',
-    apiKey: string,
-    apiBaseUrl: string = DEFAULT_API_BASE_URL
-): Promise<any> => {
-    const response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}/feedback`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-            message_id: messageId,
-            session_id: sessionId,
-            rating
-        })
+  public submitEnquiry(data: EnquiryData): Promise<any> {
+    return this.request<any>("/leads", {
+      method: "POST",
+      body: JSON.stringify(data),
     });
+  }
 
-    if (!response.ok) {
-        throw new Error("Feedback submission failed");
-    }
+  public submitFeedback(messageId: string, sessionId: string, rating: 'like' | 'dislike'): Promise<any> {
+    return this.request<any>("/feedback", {
+      method: "POST",
+      body: JSON.stringify({ message_id: messageId, session_id: sessionId, rating }),
+    });
+  }
+}
 
-    return response.json();
-};
+export const apiClient = new ApiClient();
+
+export const chat = (query: string, current_url: string, current_page_title: string) =>
+  apiClient.chat(query, current_url, current_page_title);
+
+export const getWidgetConfig = () =>
+  apiClient.getWidgetConfig();
+
+export const submitEnquiry = (data: EnquiryData) =>
+  apiClient.submitEnquiry(data);
+
+export const submitFeedback = (messageId: string, sessionId: string, rating: 'like' | 'dislike') =>
+  apiClient.submitFeedback(messageId, sessionId, rating);

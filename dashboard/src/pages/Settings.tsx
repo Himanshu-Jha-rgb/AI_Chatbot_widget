@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { privateAxios } from '../utils/axios';
 import { useStore, hasAccess } from '../store';
-import { Copy, Check, RotateCw, Globe, Key, HelpCircle, Code, Plus, Trash2, Lock, FileText, RefreshCw } from 'lucide-react';
+import { Copy, Check, RotateCw, Globe, Key, HelpCircle, Code, Plus, Trash2, Lock, FileText } from 'lucide-react';
 
 const Settings = () => {
   const { state } = useStore();
@@ -18,10 +18,6 @@ const Settings = () => {
   const isEditor = hasAccess(state.role, 'write');
   const isAdmin = hasAccess(state.role, 'delete');
 
-  useEffect(() => {
-    fetchMe();
-  }, []);
-
   const fetchMe = async () => {
     try {
       const res = await privateAxios.get('/tenants/me');
@@ -33,6 +29,10 @@ const Settings = () => {
       console.error(err);
     }
   };
+
+  useEffect(() => {
+    fetchMe();
+  }, []);
 
   const triggerRbacError = (msg: string) => {
     setRbacError(msg);

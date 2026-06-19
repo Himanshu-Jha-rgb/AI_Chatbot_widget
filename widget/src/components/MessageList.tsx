@@ -26,44 +26,29 @@ export function MessageList({
   onEnquirySubmit,
 }: MessageListProps) {
   return (
-    <div style={{
-      flex: 1,
-      padding: '16px',
-      overflowY: 'auto',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '10px',
-      backgroundColor: palette.msgAreaBg,
-    }}>
+    <div 
+      className="flex-1 p-4 overflow-y-auto flex flex-col gap-2.5"
+      style={{ backgroundColor: palette.msgAreaBg }}
+    >
       {/* Empty state — suggested questions */}
       {messages.length === 0 && suggestedQuestions.length > 0 && (
-        <div style={{ marginTop: 'auto', marginBottom: 'auto' }}>
-          <p style={{
-            textAlign: 'center',
-            color: palette.subtleText,
-            fontSize: '12px',
-            marginBottom: '10px',
-            fontWeight: 500,
-            letterSpacing: '0.04em',
-            textTransform: 'uppercase',
-          }}>Suggested</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div className="my-auto">
+          <p 
+            className="text-center text-[12px] mb-2.5 font-semibold tracking-wider uppercase"
+            style={{ color: palette.subtleText }}
+          >
+            Suggested
+          </p>
+          <div className="flex flex-col gap-2">
             {suggestedQuestions.map((q, i) => (
               <button
                 key={i}
                 onClick={() => onSend(q)}
+                className="px-3.5 py-2.5 rounded-xl text-left text-[13px] font-semibold cursor-pointer border transition-all duration-150 leading-relaxed"
                 style={{
-                  padding: '10px 14px',
-                  borderRadius: '12px',
-                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : `${accent}30`}`,
+                  borderColor: isDark ? 'rgba(255,255,255,0.2)' : `${accent}30`,
                   backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : `${accent}08`,
                   color: isDark ? '#fff' : accent,
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  textAlign: 'left',
-                  transition: 'all 0.15s ease',
-                  lineHeight: '1.4',
-                  fontWeight: 500,
                 }}
                 onMouseEnter={e => {
                   e.currentTarget.style.backgroundColor = isDark ? 'rgba(255,255,255,0.14)' : `${accent}18`;
@@ -83,32 +68,21 @@ export function MessageList({
 
       {/* Empty state — no suggestions */}
       {messages.length === 0 && suggestedQuestions.length === 0 && (
-        <div style={{
-          marginTop: 'auto',
-          marginBottom: 'auto',
-          textAlign: 'center',
-          padding: '0 20px',
-        }}>
-          <div style={{
-            width: '52px',
-            height: '52px',
-            borderRadius: '16px',
-            background: `${accent}15`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 14px',
-          }}>
+        <div className="my-auto text-center px-5">
+          <div 
+            className="w-13 h-13 rounded-2xl flex items-center justify-center mx-auto mb-3.5"
+            style={{ background: `${accent}15` }}
+          >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
           </div>
-          <p style={{
-            color: palette.subtleText,
-            fontSize: '14px',
-            margin: 0,
-            lineHeight: '1.5',
-          }}>Ask me anything about this site!</p>
+          <p 
+            className="text-[14px] m-0 leading-relaxed"
+            style={{ color: palette.subtleText }}
+          >
+            Ask me anything about this site!
+          </p>
         </div>
       )}
 
@@ -116,35 +90,33 @@ export function MessageList({
       {messages.map((m, i) => (
         <div
           key={i}
+          className="max-w-[85%] animate-[cwSlideUp_0.25s_cubic-bezier(0.16,1,0.3,1)]"
           style={{
             alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-            maxWidth: '85%',
-            animation: 'cwSlideUp 0.25s cubic-bezier(0.16,1,0.3,1)',
           }}
         >
-          <div style={{
-            padding: '10px 14px',
-            borderRadius: m.role === 'user'
-              ? '18px 18px 4px 18px'
-              : '18px 18px 18px 4px',
-            backgroundColor: m.role === 'user'
-              ? palette.userBubbleBg
-              : palette.assistantBubbleBg,
-            color: m.role === 'user'
-              ? palette.userBubbleText
-              : palette.assistantBubbleText,
-            border: m.role === 'user'
-              ? 'none'
-              : `1px solid ${palette.assistantBubbleBorder}`,
-            boxShadow: m.role === 'user'
-              ? `0 2px 10px ${accent}25`
-              : isDark
-                ? '0 1px 3px rgba(0,0,0,0.2)'
-                : '0 1px 4px rgba(0,0,0,0.04)',
-            lineHeight: '1.6',
-            fontSize: '14px',
-            wordBreak: 'break-word',
-          }}>
+          <div 
+            className="px-3.5 py-2.5 leading-relaxed text-[14px] break-words"
+            style={{
+              borderRadius: m.role === 'user'
+                ? '18px 18px 4px 18px'
+                : '18px 18px 18px 4px',
+              backgroundColor: m.role === 'user'
+                ? palette.userBubbleBg
+                : palette.assistantBubbleBg,
+              color: m.role === 'user'
+                ? palette.userBubbleText
+                : palette.assistantBubbleText,
+              border: m.role === 'user'
+                ? 'none'
+                : `1px solid ${palette.assistantBubbleBorder}`,
+              boxShadow: m.role === 'user'
+                ? `0 2px 10px ${accent}25`
+                : isDark
+                  ? '0 1px 3px rgba(0,0,0,0.2)'
+                  : '0 1px 4px rgba(0,0,0,0.04)',
+            }}
+          >
             {m.role === 'user' ? (
               m.content
             ) : (
@@ -155,25 +127,26 @@ export function MessageList({
                       href={href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      style={{ color: accent, textDecoration: 'underline', textUnderlineOffset: '2px' }}
+                      className="underline underline-offset-2"
+                      style={{ color: accent }}
                     >
                       {children}
                     </a>
                   ),
                   strong: ({ children }) => (
-                    <strong style={{ fontWeight: 600 }}>{children}</strong>
+                    <strong className="font-semibold">{children}</strong>
                   ),
                   p: ({ children }) => (
-                    <p style={{ margin: '4px 0', lineHeight: '1.6' }}>{children}</p>
+                    <p className="my-1 leading-relaxed">{children}</p>
                   ),
                   ul: ({ children }) => (
-                    <ul style={{ margin: '4px 0', paddingLeft: '20px' }}>{children}</ul>
+                    <ul className="my-1 pl-5 list-disc">{children}</ul>
                   ),
                   ol: ({ children }) => (
-                    <ol style={{ margin: '4px 0', paddingLeft: '20px' }}>{children}</ol>
+                    <ol className="my-1 pl-5 list-decimal">{children}</ol>
                   ),
                   li: ({ children }) => (
-                    <li style={{ margin: '2px 0' }}>{children}</li>
+                    <li className="my-0.5">{children}</li>
                   ),
                 }}
               >
@@ -184,14 +157,10 @@ export function MessageList({
 
           {/* Sources */}
           {m.sources && m.sources.length > 0 && (
-            <div style={{
-              fontSize: '11px',
-              marginTop: '6px',
-              color: palette.subtleText,
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '4px',
-            }}>
+            <div 
+              className="text-[11px] mt-1.5 flex flex-wrap gap-1"
+              style={{ color: palette.subtleText }}
+            >
               {m.sources.map((s, idx) => {
                 const label = s.section_title || s.title || `Source ${idx + 1}`;
                 const fullTitle = s.section_path || label;
@@ -200,13 +169,8 @@ export function MessageList({
                     key={idx}
                     href={s.url}
                     title={fullTitle}
-                    style={{
-                      color: isDark ? '#fff' : accent,
-                      opacity: 0.75,
-                      transition: 'opacity 0.15s',
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                    onMouseLeave={e => e.currentTarget.style.opacity = '0.75'}
+                    className="opacity-75 transition-opacity duration-150 hover:opacity-100"
+                    style={{ color: isDark ? '#fff' : accent }}
                   >
                     [{idx + 1}] {label}
                   </a>
@@ -217,20 +181,14 @@ export function MessageList({
 
           {/* Feedback buttons */}
           {m.role === 'assistant' && m.messageId && (
-            <div style={{ display: 'flex', gap: '2px', marginTop: '4px' }}>
+            <div className="flex gap-0.5 mt-1">
               <button
                 onClick={() => onFeedback(i, 'like')}
                 aria-label="Helpful"
+                className="bg-none border-none cursor-pointer px-1.25 py-0.75 text-[13px] transition-all duration-150 rounded-md"
                 style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '3px 5px',
-                  fontSize: '13px',
                   opacity: m.feedback === 'like' ? 1 : 0.35,
                   color: m.feedback === 'like' ? '#22c55e' : palette.subtleText,
-                  transition: 'opacity 0.15s, color 0.15s',
-                  borderRadius: '6px',
                 }}
                 onMouseEnter={e => { if (!m.feedback) e.currentTarget.style.opacity = '0.7'; }}
                 onMouseLeave={e => { if (!m.feedback) e.currentTarget.style.opacity = '0.35'; }}
@@ -238,16 +196,10 @@ export function MessageList({
               <button
                 onClick={() => onFeedback(i, 'dislike')}
                 aria-label="Not helpful"
+                className="bg-none border-none cursor-pointer px-1.25 py-0.75 text-[13px] transition-all duration-150 rounded-md"
                 style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '3px 5px',
-                  fontSize: '13px',
                   opacity: m.feedback === 'dislike' ? 1 : 0.35,
                   color: m.feedback === 'dislike' ? '#ef4444' : palette.subtleText,
-                  transition: 'opacity 0.15s, color 0.15s',
-                  borderRadius: '6px',
                 }}
                 onMouseEnter={e => { if (!m.feedback) e.currentTarget.style.opacity = '0.7'; }}
                 onMouseLeave={e => { if (!m.feedback) e.currentTarget.style.opacity = '0.35'; }}
@@ -266,15 +218,7 @@ export function MessageList({
 
           {/* Enquiry submitted confirmation */}
           {m.showEnquiryForm && m.enquirySubmitted && (
-            <div style={{
-              marginTop: '8px',
-              fontSize: '13px',
-              color: '#22c55e',
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}>
+            <div className="mt-2 text-[13px] text-green-500 font-semibold flex items-center gap-1.5">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>

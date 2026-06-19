@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ThemeState } from '../types';
 import { ACCENT_FALLBACK, isColorDark } from '../utils/theme';
+import { DEFAULT_FONT_FAMILY } from '../utils/constants';
 
 function checkDarkTheme(): boolean {
   try {
@@ -24,7 +25,7 @@ function checkDarkTheme(): boolean {
     const docStyles = window.getComputedStyle(htmlEl);
     const bgRaw = bodyStyles.backgroundColor || docStyles.backgroundColor;
     return isColorDark(bgRaw);
-  } catch (e) {
+  } catch {
     return false;
   }
 }
@@ -32,7 +33,7 @@ function checkDarkTheme(): boolean {
 export function useHostTheme(): ThemeState {
   const [theme, setTheme] = useState<ThemeState>({
     accent: ACCENT_FALLBACK,
-    font: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    font: DEFAULT_FONT_FAMILY,
     isDark: false,
   });
 
@@ -57,7 +58,7 @@ export function useHostTheme(): ThemeState {
 
         const isDark = checkDarkTheme();
         setTheme({ accent, font, isDark });
-      } catch (_) {
+      } catch {
         // Fallback
       }
     };

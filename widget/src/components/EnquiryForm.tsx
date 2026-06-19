@@ -15,14 +15,17 @@ export function EnquiryForm({ accent, palette, onSubmit }: EnquiryFormProps) {
     onSubmit(formData);
   };
 
+  const inputClass = "w-full px-3 py-2.25 mb-1.5 rounded-lg border outline-none text-[13px] box-border transition-colors duration-150";
+
   return (
-    <div style={{
-      marginTop: '10px',
-      borderTop: `1px solid ${palette.divider}`,
-      paddingTop: '10px',
-      animation: 'cwSlideUp 0.2s ease-out',
-    }}>
-      <p style={{ margin: '0 0 8px 0', fontSize: '12px', color: palette.subtleText, fontWeight: 500 }}>
+    <div 
+      className="mt-2.5 pt-2.5 animate-[cwSlideUp_0.2s_ease-out]"
+      style={{ borderTop: `1px solid ${palette.divider}` }}
+    >
+      <p 
+        className="m-0 mb-2 text-[12px] font-semibold"
+        style={{ color: palette.subtleText }}
+      >
         Leave your details and we'll get back to you:
       </p>
       <input
@@ -30,18 +33,11 @@ export function EnquiryForm({ accent, palette, onSubmit }: EnquiryFormProps) {
         placeholder="Your Name *"
         value={formData.name}
         onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+        className={inputClass}
         style={{
-          width: '100%',
-          padding: '9px 12px',
-          marginBottom: '6px',
-          borderRadius: '10px',
-          border: `1px solid ${palette.inputBorder}`,
+          borderColor: palette.inputBorder,
           backgroundColor: palette.inputBg,
-          outline: 'none',
-          fontSize: '13px',
-          boxSizing: 'border-box',
           color: palette.inputText,
-          transition: 'border-color 0.15s',
         }}
         onFocus={e => e.currentTarget.style.borderColor = accent}
         onBlur={e => e.currentTarget.style.borderColor = palette.inputBorder}
@@ -51,18 +47,11 @@ export function EnquiryForm({ accent, palette, onSubmit }: EnquiryFormProps) {
         placeholder="Your Email *"
         value={formData.email}
         onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+        className={inputClass}
         style={{
-          width: '100%',
-          padding: '9px 12px',
-          marginBottom: '6px',
-          borderRadius: '10px',
-          border: `1px solid ${palette.inputBorder}`,
+          borderColor: palette.inputBorder,
           backgroundColor: palette.inputBg,
-          outline: 'none',
-          fontSize: '13px',
-          boxSizing: 'border-box',
           color: palette.inputText,
-          transition: 'border-color 0.15s',
         }}
         onFocus={e => e.currentTarget.style.borderColor = accent}
         onBlur={e => e.currentTarget.style.borderColor = palette.inputBorder}
@@ -72,18 +61,11 @@ export function EnquiryForm({ accent, palette, onSubmit }: EnquiryFormProps) {
         placeholder="Phone (optional)"
         value={formData.phone}
         onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+        className="w-full px-3 py-2.25 mb-2 rounded-lg border outline-none text-[13px] box-border transition-colors duration-150"
         style={{
-          width: '100%',
-          padding: '9px 12px',
-          marginBottom: '8px',
-          borderRadius: '10px',
-          border: `1px solid ${palette.inputBorder}`,
+          borderColor: palette.inputBorder,
           backgroundColor: palette.inputBg,
-          outline: 'none',
-          fontSize: '13px',
-          boxSizing: 'border-box',
           color: palette.inputText,
-          transition: 'border-color 0.15s',
         }}
         onFocus={e => e.currentTarget.style.borderColor = accent}
         onBlur={e => e.currentTarget.style.borderColor = palette.inputBorder}
@@ -91,21 +73,11 @@ export function EnquiryForm({ accent, palette, onSubmit }: EnquiryFormProps) {
       <button
         onClick={handleFormSubmit}
         disabled={!formData.name.trim() || !formData.email.trim()}
+        className="w-full py-2.5 rounded-lg border-none text-white cursor-pointer font-semibold text-[13px] transition-all duration-150 active:scale-98"
         style={{
-          width: '100%',
-          padding: '10px',
-          borderRadius: '10px',
-          border: 'none',
           backgroundColor: accent,
-          color: '#fff',
-          cursor: 'pointer',
-          fontWeight: 600,
-          fontSize: '13px',
           opacity: formData.name.trim() && formData.email.trim() ? 1 : 0.5,
-          transition: 'opacity 0.15s, transform 0.1s',
         }}
-        onMouseDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
-        onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
       >
         Submit
       </button>

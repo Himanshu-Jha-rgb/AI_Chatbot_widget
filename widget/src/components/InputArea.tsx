@@ -34,33 +34,24 @@ export function InputArea({
   };
 
   return (
-    <div style={{
-      padding: '12px 14px',
-      borderTop: `1px solid ${palette.divider}`,
-      backgroundColor: isDark ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.6)',
-      backdropFilter: 'blur(8px)',
-      WebkitBackdropFilter: 'blur(8px)',
-      display: 'flex',
-      gap: '8px',
-      alignItems: 'center',
-      flexShrink: 0,
-    }}>
+    <div 
+      className="px-3.5 py-3 border-t backdrop-blur-md flex gap-2 items-center shrink-0"
+      style={{
+        borderTopColor: palette.divider,
+        backgroundColor: isDark ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.6)',
+      }}
+    >
       <input
         type="text"
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Type your message..."
+        className="flex-1 px-4 py-2.75 rounded-3xl border outline-none text-[14px] transition-all duration-150"
         style={{
-          flex: 1,
-          padding: '11px 16px',
-          borderRadius: '24px',
-          border: `1px solid ${palette.inputBorder}`,
+          borderColor: palette.inputBorder,
           backgroundColor: palette.inputBg,
-          outline: 'none',
-          fontSize: '14px',
           color: palette.inputText,
-          transition: 'border-color 0.15s, box-shadow 0.15s',
           fontFamily: font,
         }}
         onFocus={e => {
@@ -76,25 +67,13 @@ export function InputArea({
         onClick={handleSendClick}
         disabled={isLoading || !input.trim()}
         aria-label="Send message"
+        className="w-10 h-10 rounded-full border-none text-white cursor-pointer flex items-center justify-center transition-all duration-150 shrink-0 active:scale-92"
         style={{
-          width: '40px',
-          height: '40px',
-          borderRadius: '50%',
-          border: 'none',
           backgroundColor: accent,
-          color: '#fff',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          transition: 'opacity 0.15s, transform 0.1s, background-color 0.15s',
           opacity: isLoading || !input.trim() ? 0.45 : 1,
-          flexShrink: 0,
         }}
         onMouseEnter={e => { if (!isLoading && input.trim()) e.currentTarget.style.opacity = '0.85'; }}
         onMouseLeave={e => { e.currentTarget.style.opacity = isLoading || !input.trim() ? '0.45' : '1'; }}
-        onMouseDown={e => e.currentTarget.style.transform = 'scale(0.92)'}
-        onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <line x1="22" y1="2" x2="11" y2="13" />

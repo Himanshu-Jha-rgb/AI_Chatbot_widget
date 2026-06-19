@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { chat, submitEnquiry, getWidgetConfig, submitFeedback } from './api';
+import { chat, submitEnquiry, getWidgetConfig, submitFeedback, apiClient } from './api';
 import { WidgetProps, Message } from './types';
 import { getPalette } from './utils/theme';
 import { useHostTheme } from './hooks/useHostTheme';
@@ -10,10 +10,37 @@ import { Header } from './components/Header';
 import { FloatingButton } from './components/FloatingButton';
 import { MessageList } from './components/MessageList';
 import { InputArea } from './components/InputArea';
+import {
+  SESSION_EXPIRY_MS,
+  HISTORY_STORAGE_KEY_PREFIX,
+  WIDGET_WIDTH,
+  WIDGET_HEIGHT,
+  MOBILE_WIDGET_HEIGHT,
+  DRAG_HANDLE_WIDTH,
+  DRAG_HANDLE_HEIGHT,
+  SCROLL_INTO_VIEW_DELAY
+} from './utils/constants';
 
 export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
+  apiClient.init(apiKey, apiBaseUrl);
+
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    if (!apiKey) return [];
+    try {
+      const stored = sessionStorage.getItem(`${HISTORY_STORAGE_KEY_PREFIX}${apiKey}`);
+      if (stored) {
+        const { messages: storedMessages, lastInteractionTime } = JSON.parse(stored);
+        const isExpired = Date.now() - lastInteractionTime > SESSION_EXPIRY_MS;
+        if (!isExpired) {
+          return storedMessages;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load chat history from sessionStorage", e);
+    }
+    return [];
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -36,30 +63,13 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
   useEffect(() => {
     const fetchConfig = async () => {
       try {
-        const config = await getWidgetConfig(apiKey, apiBaseUrl);
+        const config = await getWidgetConfig();
         if (config?.suggested_questions) setSuggestedQuestions(config.suggested_questions);
       } catch (err) {
         console.error("Failed to fetch widget config", err);
       }
     };
     fetchConfig();
-  }, [apiKey, apiBaseUrl]);
-
-  // Restore chat history on mount
-  useEffect(() => {
-    if (!apiKey) return;
-    try {
-      const stored = sessionStorage.getItem(`cw_history_${apiKey}`);
-      if (stored) {
-        const { messages: storedMessages, lastInteractionTime } = JSON.parse(stored);
-        const isExpired = Date.now() - lastInteractionTime > 24 * 60 * 60 * 1000;
-        if (!isExpired) {
-          setMessages(storedMessages);
-        }
-      }
-    } catch (e) {
-      console.error("Failed to load chat history from sessionStorage", e);
-    }
   }, [apiKey]);
 
   // Persist chat history on updates
@@ -71,7 +81,7 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
           messages,
           lastInteractionTime: Date.now()
         };
-        sessionStorage.setItem(`cw_history_${apiKey}`, JSON.stringify(data));
+        sessionStorage.setItem(`${HISTORY_STORAGE_KEY_PREFIX}${apiKey}`, JSON.stringify(data));
       } catch (e) {
         console.error("Failed to save chat history to sessionStorage", e);
       }
@@ -82,7 +92,7 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
     // Scroll to bottom on updates
     const timer = setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, 50);
+    }, SCROLL_INTO_VIEW_DELAY);
     return () => clearTimeout(timer);
   }, [messages, isLoading]);
 
@@ -105,7 +115,7 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
     setIsLoading(true);
 
     try {
-      const res = await chat(text, window.location.href, document.title, apiKey, apiBaseUrl);
+      const res = await chat(text, window.location.href, document.title);
       const botMsg: Message = {
         role: 'assistant',
         messageId: res.message_id,
@@ -122,7 +132,7 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
     } finally {
       setIsLoading(false);
     }
-  }, [apiKey, apiBaseUrl, clearEnquiryForms]);
+  }, [clearEnquiryForms]);
 
   const handleEnquirySubmit = useCallback(async (msgIndex: number, formData: { name: string; email: string; phone: string }) => {
     const getSessionId = () => {
@@ -142,7 +152,7 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
         phone: formData.phone.trim(),
         message: contextText,
         session_id: getSessionId(),
-      }, apiKey, apiBaseUrl);
+      });
 
       setMessages(prev => prev.map((m, i) =>
         i === msgIndex ? { ...m, enquirySubmitted: true } : m
@@ -150,7 +160,7 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
     } catch (error) {
       console.error("Enquiry submit error:", error);
     }
-  }, [messages, apiKey, apiBaseUrl]);
+  }, [messages]);
 
   const handleFeedback = useCallback(async (msgIndex: number, rating: 'like' | 'dislike') => {
     const msg = messages[msgIndex];
@@ -162,14 +172,14 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
     };
 
     try {
-      await submitFeedback(msg.messageId, getSessionId(), rating, apiKey, apiBaseUrl);
+      await submitFeedback(msg.messageId, getSessionId(), rating);
       setMessages(prev => prev.map((m, i) =>
         i === msgIndex ? { ...m, feedback: rating } : m
       ));
     } catch (error) {
       console.error("Feedback error:", error);
     }
-  }, [messages, apiKey, apiBaseUrl]);
+  }, [messages]);
 
   return (
     <div
@@ -201,46 +211,45 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
               }}
             />
           )}
-          <div style={{
-            width: isMobile ? '100vw' : '380px',
-            height: isMobile ? '75dvh' : '560px',
-            position: isMobile ? 'fixed' : 'relative',
-            bottom: isMobile ? 0 : undefined,
-            right: isMobile ? 0 : undefined,
-            display: 'flex',
-            flexDirection: 'column',
-            borderRadius: isMobile ? '24px 24px 0 0' : '24px',
-            overflow: 'hidden',
-            background: palette.containerBg,
-            backdropFilter: isMobile ? 'none' : 'blur(16px) saturate(180%)',
-            WebkitBackdropFilter: isMobile ? 'none' : 'blur(16px) saturate(180%)',
-            border: isMobile ? 'none' : `1px solid ${palette.containerBorder}`,
-            boxShadow: isMobile
-              ? '0 -4px 24px rgba(0,0,0,0.15)'
-              : isDark
-                ? '0 12px 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04)'
-                : '0 12px 40px rgba(0,0,0,0.12), 0 0 0 1px rgba(255,255,255,0.6)',
-            animation: isMobile
-              ? 'cwSlideUpMobile 0.3s cubic-bezier(0.16,1,0.3,1)'
-              : 'cwFadeIn 0.3s cubic-bezier(0.16,1,0.3,1)',
-            fontFamily: font,
-            zIndex: 2147483647,
-          }}>
+          <div 
+            className="flex flex-col overflow-hidden z-[2147483647]"
+            style={{
+              width: isMobile ? '100vw' : WIDGET_WIDTH,
+              height: isMobile ? MOBILE_WIDGET_HEIGHT : WIDGET_HEIGHT,
+              position: isMobile ? 'fixed' : 'relative',
+              bottom: isMobile ? 0 : undefined,
+              right: isMobile ? 0 : undefined,
+              borderRadius: isMobile ? '24px 24px 0 0' : '24px',
+              background: palette.containerBg,
+              backdropFilter: isMobile ? 'none' : 'blur(16px) saturate(180%)',
+              WebkitBackdropFilter: isMobile ? 'none' : 'blur(16px) saturate(180%)',
+              border: isMobile ? 'none' : `1px solid ${palette.containerBorder}`,
+              boxShadow: isMobile
+                ? '0 -4px 24px rgba(0,0,0,0.15)'
+                : isDark
+                  ? '0 12px 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.04)'
+                  : '0 12px 40px rgba(0,0,0,0.12), 0 0 0 1px rgba(255,255,255,0.6)',
+              animation: isMobile
+                ? 'cwSlideUpMobile 0.3s cubic-bezier(0.16,1,0.3,1)'
+                : 'cwFadeIn 0.3s cubic-bezier(0.16,1,0.3,1)',
+              fontFamily: font,
+            }}
+          >
 
             {/* Mobile drag handle */}
             {isMobile && (
-              <div style={{
-                display: 'flex',
-                justifyContent: 'center',
-                padding: '12px 0 4px',
-                background: palette.headerBg,
-              }}>
-                <div style={{
-                  width: '36px',
-                  height: '4px',
-                  borderRadius: '2px',
-                  background: 'rgba(255,255,255,0.4)',
-                }} />
+              <div 
+                className="flex justify-center pt-3 pb-1"
+                style={{ background: palette.headerBg }}
+              >
+                <div 
+                  className="rounded"
+                  style={{
+                    width: DRAG_HANDLE_WIDTH,
+                    height: DRAG_HANDLE_HEIGHT,
+                    background: 'rgba(255,255,255,0.4)',
+                  }} 
+                />
               </div>
             )}
 
@@ -248,13 +257,7 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
             <Header palette={palette} onClose={() => setIsOpen(false)} />
 
             {/* Messages area */}
-            <div style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-              position: 'relative'
-            }}>
+            <div className="flex-1 flex flex-col overflow-hidden relative">
               <MessageList
                 messages={messages}
                 suggestedQuestions={suggestedQuestions}
@@ -268,7 +271,7 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
 
               {/* Typing indicator overlayed at the bottom of message list area */}
               {isLoading && (
-                <div style={{ padding: '0 16px 12px', background: palette.msgAreaBg }}>
+                <div className="px-4 pb-3" style={{ background: palette.msgAreaBg }}>
                   <TypingIndicator accent={accent} isDark={isDark} />
                 </div>
               )}

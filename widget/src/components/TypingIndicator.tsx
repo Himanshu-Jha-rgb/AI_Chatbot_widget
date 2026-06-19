@@ -1,4 +1,5 @@
 import React from 'react';
+import { TYPING_DOT_SIZE, TYPING_INDICATOR_BOUNCE_DELAY } from '../utils/constants';
 
 interface TypingIndicatorProps {
   accent: string;
@@ -26,8 +27,10 @@ export function TypingIndicator({ accent, isDark }: TypingIndicatorProps) {
             key={i}
             className="cw-typing-dot"
             style={{
+              width: TYPING_DOT_SIZE,
+              height: TYPING_DOT_SIZE,
               backgroundColor: isDark ? 'rgba(255,255,255,0.8)' : accent,
-              animationDelay: `${i * 150}ms`,
+              animationDelay: `${i * TYPING_INDICATOR_BOUNCE_DELAY}ms`,
             }}
           />
         ))}

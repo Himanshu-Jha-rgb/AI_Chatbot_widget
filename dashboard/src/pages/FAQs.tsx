@@ -33,7 +33,7 @@ const FAQs = () => {
   const isEditor = hasAccess(state.role, 'write');
   const isAdmin = hasAccess(state.role, 'delete');
 
-  const fetchData = async () => {
+  const fetchData = React.useCallback(async () => {
     try {
       const [sourceRes, faqsRes] = await Promise.all([
         privateAxios.get(`/dashboard/sources/${sourceId}`),
@@ -52,11 +52,11 @@ const FAQs = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [sourceId, navigate]);
 
   useEffect(() => {
     fetchData();
-  }, [sourceId]);
+  }, [fetchData]);
 
   const triggerRbacError = (msg: string) => {
     setRbacError(msg);
@@ -131,12 +131,12 @@ const FAQs = () => {
             setIndexing(false);
             fetchData();
           }
-        } catch (e) {
+        } catch {
           clearInterval(poll);
           setIndexing(false);
         }
       }, 2000);
-    } catch (err) {
+    } catch {
       setIndexing(false);
     }
   };

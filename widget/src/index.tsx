@@ -1,5 +1,6 @@
 import { createRoot } from 'react-dom/client';
 import { Widget } from './Widget';
+import './index.css';
 
 const init = () => {
     const devRoot = document.getElementById('root');

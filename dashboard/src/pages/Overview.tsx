@@ -6,7 +6,6 @@ import {
   Layers, 
   HelpCircle, 
   MessageSquare, 
-  AlertTriangle,
   TrendingUp,
   CheckCircle,
   Chrome

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { adminAxios } from '../utils/axios';
 import { Tenant } from '../interfaces';
 import { Trash2, ShieldAlert } from 'lucide-react';
@@ -8,11 +7,6 @@ const AdminTenants = () => {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    fetchTenants();
-  }, []);
 
   const fetchTenants = async () => {
     try {
@@ -25,6 +19,10 @@ const AdminTenants = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchTenants();
+  }, []);
 
   const handleDelete = async (tenantId: string) => {
     if (!window.confirm('Are you sure you want to delete this tenant? This will delete all their data.')) return;
