@@ -531,10 +531,11 @@ sequenceDiagram
 ### Features
 
 - **Automatic logging** — Every unanswered query (out-of-scope or no-context) is logged with an embedding for similarity matching.
-- **Similarity de-duplication** — If the same question is asked again (or a similar one), the count is incremented rather than creating duplicates. Threshold: cosine similarity > 0.85.
-- **Similar FAQ suggestions** — When viewing a gap, the dashboard shows existing FAQs that are semantically close (cosine > 0.8), so tenants can see if the answer already exists or adapt an existing one.
+- **Accurate similarity de-duplication** — Compares new queries against ALL existing open gaps (not just one), finds the MOST similar match, and increments count if cosine similarity > 0.85. Prevents duplicate gaps from different phrasings of the same question.
+- **Similar FAQ suggestions** — When viewing a gap, the backend searches ALL FAQs with embeddings and returns the top 3 most semantically similar ones (cosine > 0.8), so tenants can see if the answer already exists.
 - **One-click resolve** — Tenants can write an answer and select a FAQ source directly from the Knowledge Gaps page. The backend creates the FAQ pair, indexes it into the vector search pipeline, and marks the gap as resolved.
 - **Stats & prioritization** — Dashboard shows total gaps, unresolved count, resolved count, and the most-asked unanswered questions, sorted by frequency.
+- **Union-Find clustering** — The re-cluster endpoint uses an efficient Union-Find algorithm to group similar gaps into clusters, replacing the previous O(n²) approach.
 
 ### Dashboard Page
 
@@ -555,6 +556,22 @@ POST /dashboard/knowledge/gaps/cluster              # Re-cluster gaps by similar
 ```
 
 All endpoints require JWT authentication (`Authorization: Bearer <token>`).
+
+### Recent Improvements
+
+**v1.1 - Knowledge Gap Fixes:**
+- Fixed critical bug where similarity check only compared against one random gap instead of all open gaps
+- Implemented proper similar FAQ suggestions (returns top 3 matches with cosine > 0.8)
+- Fixed MongoDB pagination to use native skip/limit instead of fetching all docs into memory
+- Replaced O(n²) re-clustering with efficient Union-Find algorithm
+- Added error logging for debugging while maintaining "never break chat" behavior
+- Added `cluster_id` field initialization for new gaps
+
+**Technical Details:**
+- Similarity threshold: 0.85 (adjustable in code)
+- FAQ suggestion threshold: 0.8 (returns top 3 matches)
+- Max gaps fetched for comparison: 1000 (configurable)
+- Embedding model: text-embedding-3-small (1536 dimensions)
 
 ## Lead Generation (Enquiry Form)
 

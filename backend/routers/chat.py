@@ -115,19 +115,35 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
         pass  # Visitor tracking must never break the chat
     # --- end session resolution ---
 
-    # Rewrite query and classify (greeting vs searchable vs out-of-scope)
-    search_query, needs_search, is_out_of_scope = await _rewrite_search_query(req.query)
-    print(f"[CHAT] query='{req.query}' → search_query='{search_query}' needs_search={needs_search} is_out_of_scope={is_out_of_scope}")
-
-    if is_out_of_scope:
-        answer = f"I'm here to answer questions about {domain}. I don't have information about that."
-        await _log_knowledge_gap(tenant_id, req.query, req.current_url, "out_of_scope", message_id)
+    # Step 1: Fast greeting check (regex, no LLM)
+    if _is_greeting(req.query):
+        print(f"[CHAT] Greeting detected: '{req.query}'")
+        answer = f"Hello! Welcome to {domain}. How can I help you today?"
+        await db.visitors.update_one(
+            {"session_id": session_id},
+            {"$addToSet": {"conversation_ids": session_id},
+             "$inc": {"total_messages": 1}}
+        )
         return ChatResponse(message_id=message_id, answer=answer, sources=[])
+
+    # Step 2: LLM rewrite query + Vector search
+    search_query, needs_search, _ = await _rewrite_search_query(req.query)
+    print(f"[CHAT] query='{req.query}' → search_query='{search_query}' needs_search={needs_search}")
+
+    chunks = []
+    top_score = 0.0
+    DIRECT_ANSWER_THRESHOLD = 0.75
 
     if needs_search:
         chunks = await search_chunks(tenant_id, search_query)
         print(f"[CHAT] search_chunks returned {len(chunks)} chunks")
-    else:
+        if chunks:
+            top_score = chunks[0].get("score", 0.0)
+            print(f"[CHAT] top score: {top_score:.4f}")
+
+    # If score is below threshold, treat as no match
+    if chunks and top_score < DIRECT_ANSWER_THRESHOLD:
+        print(f"[CHAT] Score {top_score:.4f} below threshold {DIRECT_ANSWER_THRESHOLD}, treating as no match")
         chunks = []
 
     # --- Retrieve conversation history (with Redis cache + Mongo fallback) ---
@@ -159,14 +175,22 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
         except Exception as e:
             print(f"Redis set failed: {e}")
 
-    # If no relevant content found and it's not a greeting, don't let the model hallucinate
-    if needs_search and not chunks:
+    # Step 3: No knowledge match found — evaluate reason
+    if not chunks:
+        gap_type = await _evaluate_no_match(req.query)
+        print(f"[CHAT] No match. Gap type: {gap_type}")
+
         messages.append({"role": "user", "content": req.query})
-        no_context_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. You do not have any information to answer the user's question, so do not make up content and do not answer unrelated questions. CRITICAL: You MUST ONLY reply in English, Hindi, or Hinglish (a mix of Hindi and English). If the user writes in English, reply in English. If the user writes in Hindi (Devanagari script), reply in Hindi. If the user writes in Hinglish (Hindi written in English script), reply in Hinglish. NEVER use any other language. However, if the user is asking about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]. Otherwise, politely say you don't have that information."""
+
+        if gap_type == "out_of_scope":
+            no_match_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. The user's question is unrelated to our business. Politely let them know you can only help with questions about {domain}. CRITICAL: You MUST ONLY reply in English, Hindi, or Hinglish. If the user writes in English, reply in English. If the user writes in Hindi (Devanagari script), reply in Hindi. If the user writes in Hinglish, reply in Hinglish. NEVER use any other language."""
+        else:
+            no_match_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. You do not have any information to answer the user's question, so do not make up content and do not answer unrelated questions. CRITICAL: You MUST ONLY reply in English, Hindi, or Hinglish (a mix of Hindi and English). If the user writes in English, reply in English. If the user writes in Hindi (Devanagari script), reply in Hindi. If the user writes in Hinglish (Hindi written in English script), reply in Hinglish. NEVER use any other language. However, if the user is asking about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]. Otherwise, politely say you don't have that information."""
+
         if summary:
-            no_context_prompt += f"\n\nHere is a summary of the conversation so far:\n{summary}"
+            no_match_prompt += f"\n\nHere is a summary of the conversation so far:\n{summary}"
         
-        api_messages = [{"role": "system", "content": no_context_prompt}] + messages[-MAX_HISTORY:]
+        api_messages = [{"role": "system", "content": no_match_prompt}] + messages[-MAX_HISTORY:]
         response = await openai_client.chat.completions.create(
             model="gpt-4o",
             messages=api_messages
@@ -184,7 +208,7 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
             summary = await _summarize_past_context(summary, messages_to_summarize)
             messages = messages_to_keep
 
-        # Update MongoDB (keeps messages capped at max 10 elements)
+        # Update MongoDB
         await db.conversations.update_one(
             {"session_id": session_id},
             {"$set": {
@@ -208,7 +232,7 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
              "$inc": {"total_messages": 1}}
         )
         if not show_form:
-            await _log_knowledge_gap(tenant_id, req.query, req.current_url, "no_context", message_id)
+            await _log_knowledge_gap(tenant_id, req.query, req.current_url, gap_type, message_id)
         return ChatResponse(message_id=message_id, answer=answer, sources=[], show_enquiry_form=show_form)
 
     context_text = "\n\n".join([
@@ -364,6 +388,51 @@ _QUERY_REWRITE_SYSTEM_PROMPT = (
     "IMPORTANT: Respond with exactly one of: 'GREETING', 'OUT_OF_SCOPE', or a rewritten English search query."
 )
 
+# --- Greeting detection (fast-path regex, no LLM) ---
+import re
+_GREETING_PATTERN = re.compile(
+    r'^(hi|hello|hey|yo|howdy|hola|namaste|namaskar|good\s*(morning|afternoon|evening|night)|'
+    r'what\'?s?\s*up|sup|how\s*are\s*you|hru|gm|gn|bye|thanks|thank\s*you|ok|okay|'
+    r'chalo|acha|theek\s*hai|haan|ji|sir|madam|boss|dost)\s*[!.?]*$',
+    re.IGNORECASE
+)
+
+def _is_greeting(query: str) -> bool:
+    """Fast regex check for greetings — no LLM call needed."""
+    return bool(_GREETING_PATTERN.match(query.strip()))
+
+
+# --- Evaluate reason when no knowledge match found ---
+async def _evaluate_no_match(query: str) -> str:
+    """Classify why no match was found: 'out_of_scope' or 'knowledge_gap'.
+    
+    Default to knowledge_gap unless clearly unrelated to any business.
+    """
+    try:
+        resp = await openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": (
+                    "The user asked a question to a business website chatbot but no answer was found.\n\n"
+                    "Is this CLEARLY unrelated to any business website? (sports, weather, politics, celebrities, "
+                    "jokes, coding, math, personal opinions, unrelated trivia)\n"
+                    "- YES → OUT_OF_SCOPE\n"
+                    "- NO / Maybe → KNOWLEDGE_GAP\n\n"
+                    "Default to KNOWLEDGE_GAP if unsure.\n"
+                    "Respond with ONLY: OUT_OF_SCOPE or KNOWLEDGE_GAP"
+                )},
+                {"role": "user", "content": query},
+            ],
+            max_tokens=20,
+            temperature=0.0,
+        )
+        result = resp.choices[0].message.content.strip().upper()
+        if "OUT_OF_SCOPE" in result:
+            return "out_of_scope"
+        return "knowledge_gap"
+    except Exception:
+        return "knowledge_gap"
+
 
 async def _rewrite_search_query(query: str) -> tuple[str, bool, bool]:
     """Returns (search_query, needs_search, is_out_of_scope).
@@ -449,15 +518,22 @@ async def _summarize_past_context(previous_summary: str, messages_to_summarize: 
 async def _log_knowledge_gap(tenant_id: str, query: str, url: str, gap_type: str, message_id: str):
     """Log a knowledge gap with embedding for similarity clustering."""
     try:
+        # Normalize query for better matching (generic, no hardcoded words)
+        import re
+        normalized = query.lower().strip()
+        normalized = re.sub(r'[^\w\s]', '', normalized)  # remove punctuation
+        normalized = re.sub(r'\s+', ' ', normalized)  # collapse whitespace
+
         # Generate embedding for the query
         embedding_resp = await openai_client.embeddings.create(
             model="text-embedding-3-small",
             input=query,
         )
         embedding = embedding_resp.data[0].embedding
+        new_embedding = np.array(embedding)
 
-        # Check for existing similar gaps (cosine similarity > 0.85)
-        similar = await db.knowledge_gaps.find_one({
+        # Find all open gaps with embeddings for similarity comparison
+        open_gaps = await db.knowledge_gaps.find({
             "tenant_id": tenant_id,
             "status": "open",
             "embedding": {"$exists": True},
@@ -465,35 +541,52 @@ async def _log_knowledge_gap(tenant_id: str, query: str, url: str, gap_type: str
             "query": 1,
             "embedding": 1,
             "count": 1,
-            "first_seen": 1,
-        })
+        }).to_list(1000)
 
-        if similar and similar.get("embedding"):
-            sim_embedding = np.array(similar["embedding"])
-            new_embedding = np.array(embedding)
-            cos_sim = np.dot(sim_embedding, new_embedding) / (np.linalg.norm(sim_embedding) * np.linalg.norm(new_embedding))
-            if cos_sim > 0.85:
-                # Increment count on existing gap
-                await db.knowledge_gaps.update_one(
-                    {"_id": similar["_id"]},
-                    {"$inc": {"count": 1}, "$set": {"last_seen": datetime.now(timezone.utc)}}
-                )
-                return
+        # Find the most similar gap (highest cosine similarity)
+        best_match = None
+        best_similarity = 0.0
+        SIMILARITY_THRESHOLD = 0.85
+
+        for gap in open_gaps:
+            if gap.get("embedding"):
+                sim_embedding = np.array(gap["embedding"])
+                cos_sim = np.dot(sim_embedding, new_embedding) / (np.linalg.norm(sim_embedding) * np.linalg.norm(new_embedding))
+
+                # Exact match after normalization
+                gap_normalized = re.sub(r'[^\w\s]', '', gap["query"].lower().strip())
+                gap_normalized = re.sub(r'\s+', ' ', gap_normalized)
+                if gap_normalized == normalized:
+                    cos_sim = 1.0
+
+                if cos_sim > best_similarity:
+                    best_similarity = cos_sim
+                    best_match = gap
+
+        # Merge with most similar gap if above threshold
+        if best_match and best_similarity > SIMILARITY_THRESHOLD:
+            await db.knowledge_gaps.update_one(
+                {"_id": best_match["_id"]},
+                {"$inc": {"count": 1}, "$set": {"last_seen": datetime.now(timezone.utc)}}
+            )
+            print(f"[KNOWLEDGE] Merged query with existing gap (similarity: {best_similarity:.3f})")
+            return
 
         # Create new gap
         await db.knowledge_gaps.insert_one({
             "tenant_id": tenant_id,
             "query": query,
             "url": url,
-            "gap_type": gap_type,  # "no_context" | "out_of_scope"
+            "gap_type": gap_type,
             "message_id": message_id,
             "embedding": embedding,
             "count": 1,
-            "status": "open",  # open | resolved | dismissed
+            "status": "open",
             "resolved_by_faq_id": None,
+            "cluster_id": None,
             "first_seen": datetime.now(timezone.utc),
             "last_seen": datetime.now(timezone.utc),
         })
-    except Exception:
-        # Never break chat for logging
-        pass
+        print(f"[KNOWLEDGE] Created new gap: {query[:50]}...")
+    except Exception as e:
+        print(f"[KNOWLEDGE] Error logging gap: {e}")

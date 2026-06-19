@@ -25,35 +25,65 @@ class GapResponse(BaseModel):
 
 
 class ResolveGapRequest(BaseModel):
-    action: str  # "create_faq" | "dismiss"
+    action: str  # "create_faq" | "dismiss" | "merge"
     faq_question: Optional[str] = None
     faq_answer: Optional[str] = None
     source_id: Optional[str] = None
+    merge_into_id: Optional[str] = None
 
 
 @router.get("/gaps")
 async def list_knowledge_gaps(
     current_tenant: dict = Depends(get_current_tenant),
     status: str = Query("open"),
+    gap_type: Optional[str] = Query(None),
     limit: int = Query(50),
     skip: int = Query(0),
 ):
-    """List knowledge gaps for the tenant, grouped by similarity."""
+    """List knowledge gaps for the tenant with similar FAQs attached."""
     tenant_id = current_tenant["tenant_id"]
 
     query_filter = {"tenant_id": tenant_id}
     if status != "all":
         query_filter["status"] = status
+    if gap_type:
+        query_filter["gap_type"] = gap_type
 
-    all_gaps = await db.knowledge_gaps.find(query_filter).sort("count", -1).to_list(1000)
-    gaps = all_gaps[skip:skip + limit]
+    # Use MongoDB native pagination
+    cursor = db.knowledge_gaps.find(query_filter).sort("count", -1).skip(skip).limit(limit)
+    gaps = await cursor.to_list(limit)
+
+    # Get all FAQs with embeddings for similarity search
+    faqs = await db.faqs.find({
+        "tenant_id": tenant_id,
+        "embedding": {"$exists": True}
+    }, {"question": 1, "answer": 1, "embedding": 1}).to_list(1000)
 
     result = []
     for gap in gaps:
         try:
             gap["gap_id"] = str(gap["_id"])
             gap.pop("_id", None)
-            gap.pop("embedding", None)
+            gap_embedding = gap.pop("embedding", None)
+
+            # Find similar FAQs if gap has embedding
+            similar_faqs = []
+            if gap_embedding and faqs:
+                gap_emb = np.array(gap_embedding)
+                for faq in faqs:
+                    if faq.get("embedding"):
+                        faq_emb = np.array(faq["embedding"])
+                        cos_sim = np.dot(gap_emb, faq_emb) / (np.linalg.norm(gap_emb) * np.linalg.norm(faq_emb))
+                        if cos_sim > 0.8:
+                            similar_faqs.append({
+                                "faq_id": str(faq["_id"]),
+                                "question": faq["question"],
+                                "similarity": round(float(cos_sim), 3),
+                            })
+                # Sort by similarity and limit to top 3
+                similar_faqs = sorted(similar_faqs, key=lambda x: x["similarity"], reverse=True)[:3]
+
+            gap["similar_faqs"] = similar_faqs
             result.append(gap)
         except Exception as e:
             print(f"[KNOWLEDGE] error processing gap: {e}")
@@ -111,6 +141,28 @@ async def resolve_knowledge_gap(
         )
         return {"status": "ok"}
 
+    elif req.action == "merge":
+        if not req.merge_into_id:
+            raise HTTPException(status_code=400, detail="merge_into_id required for merge action")
+        
+        target_gap = await db.knowledge_gaps.find_one({"_id": ObjectId(req.merge_into_id), "tenant_id": tenant_id})
+        if not target_gap:
+            raise HTTPException(status_code=404, detail="Target gap not found")
+        
+        # Merge counts and update timestamps
+        await db.knowledge_gaps.update_one(
+            {"_id": ObjectId(req.merge_into_id)},
+            {
+                "$inc": {"count": gap.get("count", 1)},
+                "$set": {"last_seen": max(gap.get("last_seen", datetime.now(timezone.utc)), target_gap.get("last_seen", datetime.now(timezone.utc)))}
+            }
+        )
+        
+        # Delete the source gap
+        await db.knowledge_gaps.delete_one({"_id": ObjectId(gap_id)})
+        
+        return {"status": "ok", "merged_into": req.merge_into_id}
+
     else:
         raise HTTPException(status_code=400, detail="Invalid action")
 
@@ -124,6 +176,10 @@ async def get_gap_stats(current_tenant: dict = Depends(get_current_tenant)):
     open_count = await db.knowledge_gaps.count_documents({"tenant_id": tenant_id, "status": "open"})
     resolved = await db.knowledge_gaps.count_documents({"tenant_id": tenant_id, "status": "resolved"})
     dismissed = await db.knowledge_gaps.count_documents({"tenant_id": tenant_id, "status": "dismissed"})
+    
+    # Count by gap_type
+    no_context_open = await db.knowledge_gaps.count_documents({"tenant_id": tenant_id, "status": "open", "gap_type": "no_context"})
+    out_of_scope_open = await db.knowledge_gaps.count_documents({"tenant_id": tenant_id, "status": "open", "gap_type": "out_of_scope"})
 
     top_gaps = await db.knowledge_gaps.find(
         {"tenant_id": tenant_id, "status": "open"}
@@ -134,6 +190,8 @@ async def get_gap_stats(current_tenant: dict = Depends(get_current_tenant)):
         "open": open_count,
         "resolved": resolved,
         "dismissed": dismissed,
+        "no_context": no_context_open,
+        "out_of_scope": out_of_scope_open,
         "top_gaps": [
             {"gap_id": str(g["_id"]), "query": g["query"], "count": g["count"]}
             for g in top_gaps
@@ -143,7 +201,7 @@ async def get_gap_stats(current_tenant: dict = Depends(get_current_tenant)):
 
 @router.post("/gaps/cluster")
 async def cluster_gaps(current_tenant: dict = Depends(get_current_tenant)):
-    """Re-cluster gaps by similarity (run periodically or on-demand)."""
+    """Re-cluster gaps by similarity using Union-Find approach."""
     tenant_id = current_tenant["tenant_id"]
 
     gaps = await db.knowledge_gaps.find(
@@ -153,26 +211,84 @@ async def cluster_gaps(current_tenant: dict = Depends(get_current_tenant)):
     if len(gaps) < 2:
         return {"clusters": 0, "message": "Not enough gaps to cluster"}
 
-    clustered = 0
-    for i, gap_a in enumerate(gaps):
-        if gap_a.get("cluster_id"):
-            continue
-        cluster_id = f"cluster_{gap_a['_id']}"
+    SIMILARITY_THRESHOLD = 0.85
+    parent = {str(g["_id"]): str(g["_id"]) for g in gaps}
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(x, y):
+        px, py = find(x), find(y)
+        if px != py:
+            parent[px] = py
+
+    # Build clusters using Union-Find
+    embeddings = {}
+    for gap in gaps:
+        gid = str(gap["_id"])
+        embeddings[gid] = np.array(gap["embedding"])
+
+    gap_ids = list(embeddings.keys())
+    for i in range(len(gap_ids)):
+        for j in range(i + 1, len(gap_ids)):
+            id_a, id_b = gap_ids[i], gap_ids[j]
+            cos_sim = np.dot(embeddings[id_a], embeddings[id_b]) / (
+                np.linalg.norm(embeddings[id_a]) * np.linalg.norm(embeddings[id_b])
+            )
+            if cos_sim > SIMILARITY_THRESHOLD:
+                union(id_a, id_b)
+
+    # Assign cluster IDs based on connected components
+    clusters = {}
+    for gap_id in gap_ids:
+        root = find(gap_id)
+        if root not in clusters:
+            clusters[root] = f"cluster_{root[:8]}"
+        cluster_id = clusters[root]
         await db.knowledge_gaps.update_one(
-            {"_id": gap_a["_id"]},
+            {"_id": ObjectId(gap_id)},
             {"$set": {"cluster_id": cluster_id}}
         )
-        a_emb = np.array(gap_a["embedding"])
-        for gap_b in gaps[i + 1:]:
-            if gap_b.get("cluster_id"):
-                continue
-            b_emb = np.array(gap_b["embedding"])
-            cos_sim = np.dot(a_emb, b_emb) / (np.linalg.norm(a_emb) * np.linalg.norm(b_emb))
-            if cos_sim > 0.85:
-                await db.knowledge_gaps.update_one(
-                    {"_id": gap_b["_id"]},
-                    {"$set": {"cluster_id": cluster_id}}
-                )
-                clustered += 1
 
-    return {"clusters_created": clustered, "total_gaps": len(gaps)}
+    return {"clusters_created": len(clusters), "total_gaps": len(gaps)}
+
+
+@router.post("/gaps/cleanup")
+async def cleanup_duplicates(current_tenant: dict = Depends(get_current_tenant)):
+    """Find and merge duplicate gaps with normalized text matching."""
+    import re
+    tenant_id = current_tenant["tenant_id"]
+    
+    gaps = await db.knowledge_gaps.find(
+        {"tenant_id": tenant_id, "status": "open"}
+    ).to_list(1000)
+    
+    def normalize_query(q):
+        n = q.lower().strip()
+        n = re.sub(r'[^\w\s]', '', n)
+        n = re.sub(r'\s+', ' ', n)
+        return n
+    
+    merged = 0
+    seen = {}
+    
+    for gap in gaps:
+        norm = normalize_query(gap["query"])
+        if norm in seen:
+            target_id = seen[norm]
+            await db.knowledge_gaps.update_one(
+                {"_id": ObjectId(target_id)},
+                {
+                    "$inc": {"count": gap.get("count", 1)},
+                    "$set": {"last_seen": datetime.now(timezone.utc)}
+                }
+            )
+            await db.knowledge_gaps.delete_one({"_id": gap["_id"]})
+            merged += 1
+        else:
+            seen[norm] = str(gap["_id"])
+    
+    return {"merged": merged, "remaining": len(gaps) - merged}

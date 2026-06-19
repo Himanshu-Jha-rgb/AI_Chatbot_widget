@@ -8,7 +8,8 @@ import {
   Plus, 
   TrendingUp,
   X,
-  Lock
+  Lock,
+  Link as LinkIcon
 } from 'lucide-react';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -22,6 +23,7 @@ const KnowledgeImprovement = () => {
   const [gaps, setGaps] = useState<KnowledgeGap[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('open');
+  const [gapType, setGapType] = useState<string | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
   const [resolving, setResolving] = useState<string | null>(null);
   const [faqForm, setFaqForm] = useState({ question: '', answer: '', source_id: '' });
@@ -31,8 +33,11 @@ const KnowledgeImprovement = () => {
 
   const fetchGaps = useCallback(async () => {
     try {
+      let url = `/dashboard/knowledge/gaps?status=${filter}`;
+      if (gapType) url += `&gap_type=${gapType}`;
+      
       const [gapsRes, statsRes, sourcesRes] = await Promise.all([
-        privateAxios.get(`/dashboard/knowledge/gaps?status=${filter}`),
+        privateAxios.get(url),
         privateAxios.get('/dashboard/knowledge/gaps/stats'),
         privateAxios.get('/dashboard/sources'),
       ]);
@@ -45,7 +50,7 @@ const KnowledgeImprovement = () => {
     } finally {
       setLoading(false);
     }
-  }, [filter, dispatch]);
+  }, [filter, gapType, dispatch]);
 
   useEffect(() => {
     fetchGaps();
@@ -56,7 +61,7 @@ const KnowledgeImprovement = () => {
     setTimeout(() => setRbacError(null), 4000);
   };
 
-  const resolveGap = async (gapId: string, action: string) => {
+  const resolveGap = async (gapId: string, action: string, mergeIntoId?: string) => {
     if (!isEditor) {
       triggerRbacError("You do not have Editor permissions to resolve or dismiss knowledge gaps.");
       return;
@@ -70,6 +75,11 @@ const KnowledgeImprovement = () => {
       body.source_id = faqForm.source_id;
     }
 
+    if (action === 'merge') {
+      if (!mergeIntoId) return;
+      body.merge_into_id = mergeIntoId;
+    }
+
     setResolving(gapId);
     try {
       await privateAxios.post(`/dashboard/knowledge/gaps/${gapId}/resolve`, body);
@@ -79,6 +89,20 @@ const KnowledgeImprovement = () => {
     } catch (err) {
       console.error(err);
       setResolving(null);
+    }
+  };
+
+  const cleanupDuplicates = async () => {
+    if (!isEditor) {
+      triggerRbacError("You do not have Editor permissions to cleanup knowledge gaps.");
+      return;
+    }
+    try {
+      const res = await privateAxios.post('/dashboard/knowledge/gaps/cleanup');
+      alert(`Merged ${res.data.merged} duplicate gaps. ${res.data.remaining} gaps remaining.`);
+      fetchGaps();
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -119,20 +143,65 @@ const KnowledgeImprovement = () => {
         </div>
 
         {/* Filters */}
-        <div className="flex items-center bg-slate-900 rounded-xl border border-slate-800 p-1 self-start sm:self-auto shadow-md">
-          {['open', 'resolved', 'all'].map((s) => (
-            <button
-              key={s}
-              onClick={() => setFilter(s)}
-              className={`px-4 py-2 rounded-lg text-xs font-semibold capitalize transition-all cursor-pointer ${
-                filter === s 
-                  ? 'bg-violet-600 text-white shadow-sm' 
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              {s === 'open' ? 'Unresolved' : s}
-            </button>
-          ))}
+        <div className="flex flex-col gap-2 self-start sm:self-auto">
+          <div className="flex items-center bg-slate-900 rounded-xl border border-slate-800 p-1 shadow-md">
+            {['open', 'resolved', 'all'].map((s) => (
+              <button
+                key={s}
+                onClick={() => setFilter(s)}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold capitalize transition-all cursor-pointer ${
+                  filter === s 
+                    ? 'bg-violet-600 text-white shadow-sm' 
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                {s === 'open' ? 'Unresolved' : s}
+              </button>
+            ))}
+            {filter === 'open' && isEditor && (
+              <button
+                onClick={cleanupDuplicates}
+                className="px-4 py-2 rounded-lg text-xs font-semibold text-amber-400 hover:bg-amber-950/30 transition-all cursor-pointer ml-2"
+              >
+                Cleanup Duplicates
+              </button>
+            )}
+          </div>
+          
+          {filter === 'open' && (
+            <div className="flex items-center bg-slate-900 rounded-xl border border-slate-800 p-1 shadow-md">
+              <button
+                onClick={() => setGapType(null)}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  gapType === null 
+                    ? 'bg-slate-700 text-white shadow-sm' 
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                All Types
+              </button>
+              <button
+                onClick={() => setGapType('no_context')}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  gapType === 'no_context' 
+                    ? 'bg-rose-600 text-white shadow-sm' 
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                Knowledge Gaps
+              </button>
+              <button
+                onClick={() => setGapType('out_of_scope')}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  gapType === 'out_of_scope' 
+                    ? 'bg-amber-600 text-white shadow-sm' 
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                Out of Scope
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -146,17 +215,23 @@ const KnowledgeImprovement = () => {
 
       {/* Stats Cards */}
       {stats && (
-        <div className="grid gap-6 sm:grid-cols-3">
+        <div className="grid gap-6 sm:grid-cols-4">
           <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800/80 shadow-lg">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Unresolved Gaps</span>
-            <span className="text-3xl font-extrabold text-rose-400 mt-2 block">{stats.open}</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Knowledge Gaps</span>
+            <span className="text-3xl font-extrabold text-rose-400 mt-2 block">{stats.no_context || 0}</span>
+            <span className="text-xxs text-slate-500">No relevant context found</span>
+          </div>
+          <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800/80 shadow-lg">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Out of Scope</span>
+            <span className="text-3xl font-extrabold text-amber-400 mt-2 block">{stats.out_of_scope || 0}</span>
+            <span className="text-xxs text-slate-500">Unrelated to business</span>
           </div>
           <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800/80 shadow-lg">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Resolved via FAQ</span>
             <span className="text-3xl font-extrabold text-teal-400 mt-2 block">{stats.resolved}</span>
           </div>
           <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800/80 shadow-lg">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Total Recorded Gaps</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Total Recorded</span>
             <span className="text-3xl font-extrabold text-slate-300 mt-2 block">{stats.total}</span>
           </div>
         </div>
@@ -223,6 +298,15 @@ const KnowledgeImprovement = () => {
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xxs font-bold uppercase ${STATUS_COLORS[gap.status] || 'bg-slate-950 text-slate-400 border border-slate-800'}`}>
                       {gap.status}
                     </span>
+                    {gap.gap_type && (
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xxs font-bold ${
+                        gap.gap_type === 'no_context' 
+                          ? 'bg-rose-950/30 text-rose-400 border border-rose-900/30' 
+                          : 'bg-amber-950/30 text-amber-400 border border-amber-900/30'
+                      }`}>
+                        {gap.gap_type === 'no_context' ? 'Knowledge Gap' : 'Out of Scope'}
+                      </span>
+                    )}
                   </div>
                   
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-xxs font-semibold text-slate-500">
@@ -230,6 +314,24 @@ const KnowledgeImprovement = () => {
                     {gap.url && <span className="truncate max-w-xs">on {new URL(gap.url).hostname}</span>}
                     <span>Last seen: {new Date(gap.last_seen).toLocaleDateString()}</span>
                   </div>
+
+                  {/* Similar FAQs */}
+                  {gap.similar_faqs && gap.similar_faqs.length > 0 && (
+                    <div className="mt-2 p-2 bg-teal-950/20 rounded-lg border border-teal-900/30">
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <LinkIcon size={12} className="text-teal-400" />
+                        <span className="text-xxs font-bold text-teal-400">Similar FAQ Found ({gap.similar_faqs.length})</span>
+                      </div>
+                      <div className="space-y-1">
+                        {gap.similar_faqs.map((faq, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-xxs">
+                            <span className="text-slate-400 truncate max-w-xs">{faq.question}</span>
+                            <span className="text-teal-500 font-mono">{Math.round(faq.similarity * 100)}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex gap-2 self-end sm:self-auto">
