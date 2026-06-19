@@ -18,47 +18,56 @@ graph TD
     API <-->|Embeddings / Chat / Query Rewriting| OpenAI["OpenAI API"]
 ```
 
-### 2. Chat Flow
+### 2. Chat Flow (Updated)
+
+The chat endpoint uses a 3-step flow: greeting detection → knowledge search → classification.
+
 ```mermaid
 sequenceDiagram
     participant User as Website Visitor
     participant Widget as Chat Widget
     participant API as FastAPI Backend
-    participant Rewriter as gpt-4o-mini<br/>(Query Rewriter)
+    participant Regex as Greeting Detector
     participant Vector as Vector Search
-    participant BM25 as BM25 Full-Text
+    participant Classifier as gpt-4o-mini
     participant GPT as gpt-4o
 
-    User->>Widget: Types a question
+    User->>Widget: Types a message
     Widget->>API: POST /chat { query, session_id, api_key }
     
-    API->>Rewriter: Rewrite & classify query
-    Note over Rewriter: Returns (search_query, needs_search)
+    Step 1: Regex Greeting Check
+    API->>Regex: Check if greeting (hi, hello, etc.)
+    alt Is greeting
+        Regex-->>API: Match found
+        API-->>Widget: "Hello! Welcome to {domain}..."
+    end
     
-    alt Is greeting / small talk
-        Rewriter-->>API: ("hi", needs_search=False)
-        API->>GPT: Conversational prompt (no context)
-        GPT-->>API: "Hello! How can I help?"
+    Step 2: LLM Rewrite + Vector Search
+    API->>Classifier: Rewrite query for search
+    Classifier-->>API: Rewritten search query
     
-    else Is searchable query
-        Rewriter-->>API: ("schoollog attendance features", needs_search=True)
-        
-        par Vector Search (semantic)
-            API->>Vector: Embed query + $vectorSearch
-            Vector-->>API: Top 3 unique parents
-        and BM25 Search (keyword)
-            API->>BM25: $search on text + section_title
-            BM25-->>API: Top 2 unique parents
-        end
-        
-        API->>API: Merge & dedup (3 vector + 2 BM25)
-        API->>API: Expand child chunks to parent sections
-        
-        alt Relevant content found
-            API->>GPT: RAG prompt with context
-            GPT-->>API: Answer with citations
-        else No relevant content
-            API-->>Widget: "I don't have information about that"
+    par Vector Search (semantic)
+        API->>Vector: Embed query + $vectorSearch
+        Vector-->>API: Top results with scores
+    and BM25 Search (keyword)
+        API->>Vector: $search on text + section_title
+        Vector-->>API: Top results
+    end
+    
+    API->>API: Merge & dedup (3 vector + 2 BM25)
+    
+    alt Score > 0.75 (Good match)
+        API->>GPT: RAG prompt with context
+        GPT-->>API: Answer with citations
+    else Score ≤ 0.75 (No match)
+        Step 3: LLM Evaluate Reason
+        API->>Classifier: Classify query type
+        alt OUT_OF_SCOPE
+            API-->>Widget: "I can only help with {domain}..."
+            API->>API: Log gap (type: out_of_scope)
+        else KNOWLEDGE_GAP
+            API-->>Widget: "I don't have that info..."
+            API->>API: Log gap (type: knowledge_gap)
         end
     end
     
@@ -103,18 +112,19 @@ sequenceDiagram
     
     Crawler->>DB: Mark job as done
     Crawler->>API: Auto-generate suggested questions
-    Note over API: GPT-4o-mini generates 6 questions<br/>from indexed content
+    Crawler->>API: Auto-generate business description
+    Note over API: GPT-4o-mini generates 6 questions<br/>+ 1-2 sentence business description
 ```
 
 ### 4. Hybrid Search Merge Strategy
 ```mermaid
 flowchart TD
-    Q[User Query] --> RW[gpt-4o-mini<br/>Rewrite & Classify]
-    RW --> C{needs_search?}
+    Q[User Query] --> RG{Regex<br/>Greeting?}
+    RG -->|Yes| GR["Greeting Response<br/>(no LLM call)"]
+    RG -->|No| RW[gpt-4o-mini<br/>Rewrite Query]
     
-    C -->|No - Greeting| GP["Conversational prompt<br/>No search, no context"]
-    C -->|Yes - Searchable| VE["$vectorSearch<br/>9 candidates fetched"]
-    C -->|Yes - Searchable| BE["$search / BM25<br/>6 candidates fetched"]
+    RW --> VE["$vectorSearch<br/>9 candidates fetched"]
+    RW --> BE["$search / BM25<br/>6 candidates fetched"]
     
     VE --> VG[Top 3 unique parents<br/>by parent_id]
     BE --> BG[Top 2 unique parents<br/>by parent_id]
@@ -122,7 +132,13 @@ flowchart TD
     VG --> Merge{Merge & Dedup}
     BG --> Merge
     
-    Merge -->|3 vector + 2 BM25| PA[Parent Context Assembly]
+    Merge -->|3 vector + 2 BM25| SC{Score > 0.75?}
+    
+    SC -->|Yes| PA[Parent Context Assembly]
+    SC -->|No| CL[gpt-4o-mini<br/>Classify Query]
+    
+    CL --> OOS[OUT_OF_SCOPE<br/>Log gap + deflect]
+    CL --> KG[KNOWLEDGE_GAP<br/>Log gap + deflection]
     
     PA -->|≤1600 tokens| FS[Full parent section]
     PA -->|>1600 tokens| CW[Child + 1 neighbor each side]
@@ -368,6 +384,7 @@ flowchart LR
 - Background task calls Firecrawl API (up to 200 pages), ingests each page as markdown.
 - Old chunks for re-crawled URLs are automatically cleaned up (dedup by `crawl_id`).
 - After crawl completes, suggested questions are auto-generated from indexed content.
+- **Business description is auto-generated** from crawled content (used for query classification).
 
 #### PDF Uploads
 - Uploaded via `POST /dashboard/sources/pdf/upload`.
@@ -481,9 +498,40 @@ else:
 - Add/edit/remove manual questions
 - Save changes via `PUT /tenants/suggested-questions`
 
+## Business Description (Auto-Generated)
+
+Each tenant has a **business description** used by the AI to classify queries as knowledge gaps vs out-of-scope.
+
+### How It Works
+1. After a successful crawl, GPT-4o-mini analyzes the first 5 pages of content
+2. Generates a 1-2 sentence description of what the business does
+3. Stores it in `tenant.description`
+4. Used by `_evaluate_no_match()` to provide context for classification
+
+### Example
+> "SchoolLog is India's first AI-powered school management system that provides a comprehensive ERP solution for educational institutions..."
+
+### Manual Override
+- Tenants can edit the description in **Settings → Business Description**
+- Save via `PUT /tenants/description`
+- Dashboard shows editable textarea with current description
+
+### API Endpoints
+```
+GET  /tenants/me                          # Returns description field
+PUT  /tenants/description?description=...  # Update description (JWT auth)
+```
+
 ## Knowledge Improvement (Knowledge Gaps)
 
-When the chatbot cannot answer a question — either because it's classified as out-of-scope or no relevant content was found in the knowledge base — the backend logs the query as a **knowledge gap**. Gaps are clustered by vector similarity so that different phrasings of the same question (e.g., *"hostel fees for class 10"* and *"hostel charges class 10"*) are grouped together, showing the tenant the most-impactful gaps first.
+When the chatbot cannot answer a question — either because no relevant content was found in the knowledge base — the backend logs the query as a **knowledge gap**. Gaps are categorized by type and clustered by vector similarity.
+
+### Gap Types
+
+| Type | When Logged | Example |
+|------|-------------|---------|
+| `knowledge_gap` | Query is business-related but no answer found | "What are the school timings?" |
+| `out_of_scope` | Query is completely unrelated to the business | "Who is the prime minister?" |
 
 ### Flow
 
@@ -492,24 +540,28 @@ sequenceDiagram
     participant Visitor as Website Visitor
     participant Widget as Chat Widget
     participant API as FastAPI Backend
-    participant GapTracker as Knowledge Gap Logger
+    participant Classifier as gpt-4o-mini
     participant Embedder as text-embedding-3-small
     participant DB as MongoDB
 
-    Visitor->>Widget: Types "hostel fees for class 10"
+    Visitor->>Widget: Types "what are school timings"
     Widget->>API: POST /chat { query }
     
-    alt No relevant content found
-        API->>API: Returns "I don't have that information"
-        API->>Embedder: Embed the query
-        API->>GapTracker: Log as "no_context" gap
-        GapTracker->>DB: Check similar gaps (cosine > 0.85)
-        alt Similar gap exists
-            GapTracker->>DB: Increment count on existing gap
-        else New gap
-            GapTracker->>DB: Insert gap with embedding + count: 1
-        end
+    API->>API: Vector search returns no good match (score ≤ 0.75)
+    
+    API->>Classifier: Classify query type
+    Note over Classifier: Uses business description<br/>for context
+    Classifier-->>API: KNOWLEDGE_GAP
+    
+    API->>Embedder: Embed the query
+    API->>DB: Check similar gaps (cosine > 0.85)
+    alt Similar gap exists
+        API->>DB: Increment count on existing gap
+    else New gap
+        API->>DB: Insert gap with embedding + count: 1
     end
+    
+    API-->>Widget: "I don't have that information..."
 
     Note over Dashboard: Tenant reviews gaps later
     Dashboard->>API: GET /dashboard/knowledge/gaps
@@ -522,7 +574,7 @@ sequenceDiagram
     API-->>Dashboard: Gap marked as resolved
 
     Note over Next visitor: Same question → now answered
-    NextVisitor->>Widget: "hostel fees for class 10"
+    NextVisitor->>Widget: "what are school timings"
     Widget->>API: POST /chat
     API->>DB: Vector search finds the new FAQ
     API-->>Widget: Returns answer with sources
@@ -530,48 +582,44 @@ sequenceDiagram
 
 ### Features
 
-- **Automatic logging** — Every unanswered query (out-of-scope or no-context) is logged with an embedding for similarity matching.
-- **Accurate similarity de-duplication** — Compares new queries against ALL existing open gaps (not just one), finds the MOST similar match, and increments count if cosine similarity > 0.85. Prevents duplicate gaps from different phrasings of the same question.
-- **Similar FAQ suggestions** — When viewing a gap, the backend searches ALL FAQs with embeddings and returns the top 3 most semantically similar ones (cosine > 0.8), so tenants can see if the answer already exists.
+- **Automatic logging** — Every unanswered query is logged with an embedding for similarity matching.
+- **Two gap types** — `knowledge_gap` (business-related, missing answer) vs `out_of_scope` (unrelated to business).
+- **Accurate similarity de-duplication** — Compares new queries against ALL existing open gaps, finds the MOST similar match, and increments count if cosine similarity > 0.85.
+- **Similar FAQ suggestions** — When viewing a gap, the backend searches ALL FAQs with embeddings and returns the top 3 most semantically similar ones (cosine > 0.8).
 - **One-click resolve** — Tenants can write an answer and select a FAQ source directly from the Knowledge Gaps page. The backend creates the FAQ pair, indexes it into the vector search pipeline, and marks the gap as resolved.
-- **Stats & prioritization** — Dashboard shows total gaps, unresolved count, resolved count, and the most-asked unanswered questions, sorted by frequency.
-- **Union-Find clustering** — The re-cluster endpoint uses an efficient Union-Find algorithm to group similar gaps into clusters, replacing the previous O(n²) approach.
+- **Cleanup duplicates** — One-click button to merge duplicate gaps with identical normalized text.
+- **Union-Find clustering** — The re-cluster endpoint uses an efficient Union-Find algorithm to group similar gaps into clusters.
 
 ### Dashboard Page
 
 Navigate to **Knowledge Gaps** in the sidebar:
-- **KPIs** at the top: unresolved, resolved, total, and top-gap frequency
-- **Most-asked list**: top 5 unanswered questions ranked by count
-- **Full gap list**: each gap shows query text, times asked, last-seen timestamp, and similar FAQs
-- **Resolve form**: inline expandable form to create and index a FAQ answer immediately
+- **KPIs** at the top: Knowledge Gaps count, Out of Scope count, Resolved count, Total
 - **Filter tabs**: Unresolved / Resolved / All
+- **Gap type tabs**: All Types | Knowledge Gaps | Out of Scope
+- **Most-asked list**: top 5 unanswered questions ranked by count
+- **Full gap list**: each gap shows query text, gap type badge, times asked, last-seen timestamp, and similar FAQs
+- **Resolve form**: inline expandable form to create and index a FAQ answer immediately
+- **Cleanup Duplicates button**: merges identical gaps with normalized text matching
 
 ### API Endpoints
 
 ```
-GET  /dashboard/knowledge/gaps                     # List gaps (filter: status=open|resolved|all)
-GET  /dashboard/knowledge/gaps/stats               # Aggregate stats + top gaps
-POST /dashboard/knowledge/gaps/{gap_id}/resolve    # Resolve (action: create_faq | dismiss)
-POST /dashboard/knowledge/gaps/cluster              # Re-cluster gaps by similarity
+GET  /dashboard/knowledge/gaps                          # List gaps (filter: status, gap_type)
+GET  /dashboard/knowledge/gaps/stats                    # Aggregate stats + top gaps
+POST /dashboard/knowledge/gaps/{gap_id}/resolve         # Resolve (action: create_faq | dismiss | merge)
+POST /dashboard/knowledge/gaps/cluster                  # Re-cluster gaps by similarity (Union-Find)
+POST /dashboard/knowledge/gaps/cleanup                  # Merge duplicate gaps with normalized text
 ```
 
 All endpoints require JWT authentication (`Authorization: Bearer <token>`).
 
-### Recent Improvements
-
-**v1.1 - Knowledge Gap Fixes:**
-- Fixed critical bug where similarity check only compared against one random gap instead of all open gaps
-- Implemented proper similar FAQ suggestions (returns top 3 matches with cosine > 0.8)
-- Fixed MongoDB pagination to use native skip/limit instead of fetching all docs into memory
-- Replaced O(n²) re-clustering with efficient Union-Find algorithm
-- Added error logging for debugging while maintaining "never break chat" behavior
-- Added `cluster_id` field initialization for new gaps
-
-**Technical Details:**
-- Similarity threshold: 0.85 (adjustable in code)
+### Technical Details
+- Similarity threshold: 0.85 (for gap deduplication)
 - FAQ suggestion threshold: 0.8 (returns top 3 matches)
-- Max gaps fetched for comparison: 1000 (configurable)
+- Direct answer threshold: 0.75 (vector search score to return RAG answer)
+- Max gaps fetched for comparison: 1000
 - Embedding model: text-embedding-3-small (1536 dimensions)
+- Normalization: lowercase, remove punctuation, collapse whitespace (generic, no hardcoded words)
 
 ## Lead Generation (Enquiry Form)
 
@@ -592,15 +640,16 @@ Visitor: "How much does this cost?"
 ### Key Details
 - **Intent detection**: Done by GPT-4o in the system prompt, not keyword matching. Works across greeting, RAG, and no-results paths.
 - **Conversation summarization**: On form submit, `gpt-4o-mini` summarizes the last 3 turns of conversation into a concise description of what the lead was interested in. Raw context is also preserved (`raw_context` field).
-- **No LLM call for irrelevant queries**: "Who is Virat Kohli?" gets classified as `OUT_OF_SCOPE` by the query rewriter and returns immediately — no GPT-4o call, no token waste.
-- **Dashboard**: New "Leads" nav item with a table showing Name, Email, Phone, Date, and the summarized message.
+- **No LLM call for irrelevant queries**: "Who is Virat Kohli?" gets classified as `OUT_OF_SCOPE` by the query evaluator and returns immediately — no GPT-4o call, no token waste.
+- **Dashboard**: "Leads" nav item with a table showing Name, Email, Phone, Date, and the summarized message.
 
 ### Guardrails
 
-Two layers prevent the chatbot from answering irrelevant questions:
+The chatbot avoids answering irrelevant questions through vector search scoring:
 
-1. **Pre-search (gpt-4o-mini)**: The query rewriter classifies input as `GREETING`, `OUT_OF_SCOPE`, or searchable. Out-of-scope queries return immediately with "I'm here to answer questions about {domain}."
-2. **Hardened system prompt**: The RAG prompt instructs GPT — "If the context does not contain information relevant to the user's question, say you don't have that information."
+1. **Vector search threshold**: If the top result score ≤ 0.75, the query is treated as "no match" and sent to the classifier.
+2. **LLM classifier**: Classifies the query as `OUT_OF_SCOPE` (unrelated to business) or `KNOWLEDGE_GAP` (related but missing answer).
+3. **Hardened system prompt**: The RAG prompt instructs GPT — "If the context does not contain information relevant to the user's question, say you don't have that information."
 
 ## Rate Limiting & Abuse Protection
 
@@ -635,8 +684,15 @@ To ensure high-performance, cost-effective conversational capability, the system
 
 ## Key Design Decisions
 
-### Query Rewriting (LLM-based)
-User questions are rewritten by **gpt-4o-mini** before vector search. A conversational question like *"what is schoollog and what it does"* is transformed into **"schoollog school management software features overview"** — aligning better with the declarative website content in the vector store. The same LLM call also classifies whether the input is a greeting (skip search) or a searchable query.
+### Greeting Detection (Regex Fast-Path)
+Greetings like "hi", "hello", "hey" are detected via regex (~10ms) without any LLM call. This is faster and cheaper than the previous LLM-based classification.
+
+### Vector Search Before Classification
+Instead of classifying queries first (which skipped knowledge base lookups for out-of-scope queries), the system now:
+1. Searches the knowledge base first
+2. Only classifies if no good match found (score ≤ 0.75)
+
+This ensures answers from PDFs, FAQs, and crawled content are always found, even for queries that might be misclassified.
 
 ### Hybrid Search (Vector + BM25)
 - **3 guaranteed slots** from vector search (semantic matching via `$vectorSearch`)
@@ -648,11 +704,11 @@ User questions are rewritten by **gpt-4o-mini** before vector search. A conversa
 ### Heading Prefix in Embeddings
 Section titles (e.g., *"Bus Tracking"*) are prepended to child chunk text before embedding (stored as `search_text`). The body text alone (*"Track school buses in real-time"*) misses the most descriptive keywords. The prefix is only used for embedding — the clean `text` field is served to GPT as context.
 
-### No Score Threshold
-Vector similarity scores are not filtered — the top results are always taken. Query rewriting and hybrid search provide enough precision. Score thresholds were causing false negatives (returning nothing for valid queries).
+### Direct Answer Threshold (0.75)
+Vector search scores above 0.75 return a RAG answer directly. Below 0.75, the query is sent to the LLM classifier to determine if it's out-of-scope or a knowledge gap.
 
 ### Empty Context Guard
-If search returns zero results for a non-greeting query, the system returns *"I don't have information about that on this site"* immediately — without calling GPT-4o — preventing hallucination.
+If search returns zero results for a non-greeting query, the system classifies the query and returns an appropriate response — without calling GPT-4o for a RAG answer — preventing hallucination.
 
 ## Tech Stack
 
@@ -664,6 +720,8 @@ If search returns zero results for a non-greeting query, the system returns *"I 
 | Embeddings | OpenAI `text-embedding-3-small` |
 | Chat LLM | OpenAI `gpt-4o` |
 | Query Rewriting | OpenAI `gpt-4o-mini` |
+| Query Classification | OpenAI `gpt-4o-mini` |
+| Business Description | OpenAI `gpt-4o-mini` |
 | Suggested Questions | OpenAI `gpt-4o-mini` |
 | Crawling | Firecrawl API |
 | Auth | JWT (python-jose) + API keys (bcrypt) |
@@ -687,6 +745,7 @@ If search returns zero results for a non-greeting query, the system returns *"I 
 | GET | `/tenants/stats` | JWT | Tenant stats |
 | POST | `/tenants/rotate-key` | JWT | Rotate API key |
 | PUT | `/tenants/suggested-questions` | JWT | Save manual suggested questions |
+| PUT | `/tenants/description` | JWT | Update business description |
 | GET | `/dashboard/analytics/feedback` | JWT | Get feedback analytics |
 | POST | `/crawl` | API Key | Start a crawl job |
 | GET | `/crawl/{job_id}` | API Key | Check crawl status |
@@ -710,16 +769,17 @@ If search returns zero results for a non-greeting query, the system returns *"I 
 | PUT | `/dashboard/sources/{source_id}/docs/{doc_id}` | JWT | Update a text document |
 | DELETE | `/dashboard/sources/{source_id}/docs/{doc_id}` | JWT | Delete a text document + its chunks |
 | POST | `/dashboard/sources/{source_id}/docs/index` | JWT | Index all text documents for search |
-| GET | `/dashboard/knowledge/gaps` | JWT | List knowledge gaps (filter by status) |
+| GET | `/dashboard/knowledge/gaps` | JWT | List knowledge gaps (filter: status, gap_type) |
 | GET | `/dashboard/knowledge/gaps/stats` | JWT | Get gap stats + top unanswered questions |
-| POST | `/dashboard/knowledge/gaps/{gap_id}/resolve` | JWT | Resolve a gap (create FAQ or dismiss) |
+| POST | `/dashboard/knowledge/gaps/{gap_id}/resolve` | JWT | Resolve a gap (create_faq, dismiss, or merge) |
 | POST | `/dashboard/knowledge/gaps/cluster` | JWT | Re-cluster open gaps by vector similarity |
+| POST | `/dashboard/knowledge/gaps/cleanup` | JWT | Merge duplicate gaps with normalized text |
 
 ## Database Collections
 
 | Collection | Purpose |
 |---|---|
-| `tenants` | Tenant accounts, API keys, suggested questions config |
+| `tenants` | Tenant accounts, API keys, description, suggested questions config |
 | `pages` | Raw crawled page content |
 | `parents` | Parent sections from markdown heading splits |
 | `chunks` | Child chunks with embeddings (searchable unit) |
@@ -731,4 +791,4 @@ If search returns zero results for a non-greeting query, the system returns *"I 
 | `documents` | Text document content |
 | `leads` | Enquiry form submissions |
 | `message_feedback` | Like/dislike feedback on AI responses |
-| `knowledge_gaps` | Unanswered queries with embeddings for similarity clustering |
+| `knowledge_gaps` | Unanswered queries with embeddings, gap_type, and similarity clustering |

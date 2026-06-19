@@ -91,6 +91,7 @@ async def crawl_task(tenant_id: str, seed_url: str, job_id: str, source_id: str 
         # Auto-generate suggested questions after successful crawl
         if pages_found > 0:
             asyncio.create_task(generate_suggested_questions(tenant_id))
+            asyncio.create_task(_generate_business_description(tenant_id, job_id))
 
     except Exception as e:
         print(f"[CRAWL {job_id}] FAILED: {e}")
@@ -199,3 +200,49 @@ async def _index_page(
         "chunks_created": 0,
         "embedding_errors": result["embedding_errors"] or 1,
     }
+
+
+async def _generate_business_description(tenant_id: str, crawl_id: str):
+    """Auto-generate a short business description from crawled content."""
+    try:
+        from services.embedder import openai_client
+
+        # Get a sample of crawled content (first 5 pages)
+        pages = await db.pages.find(
+            {"tenant_id": tenant_id, "crawl_id": crawl_id},
+            {"content": 1, "url": 1}
+        ).limit(5).to_list(5)
+
+        if not pages:
+            return
+
+        # Combine content samples (max 2000 chars total)
+        combined = ""
+        for page in pages:
+            content = page.get("content", "")[:500]
+            combined += f"\n{content}"
+            if len(combined) > 2000:
+                break
+
+        resp = await openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": (
+                    "Generate a 1-2 sentence description of what this business/website does. "
+                    "Be concise and factual. Only use information from the provided content."
+                )},
+                {"role": "user", "content": combined},
+            ],
+            max_tokens=100,
+            temperature=0.0,
+        )
+        description = resp.choices[0].message.content.strip()
+
+        await db.tenants.update_one(
+            {"tenant_id": tenant_id},
+            {"$set": {"description": description}}
+        )
+        print(f"[CRAWL] Auto-generated description for {tenant_id}: {description[:80]}...")
+
+    except Exception as e:
+        print(f"[CRAWL] Failed to generate description: {e}")

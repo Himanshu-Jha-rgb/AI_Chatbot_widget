@@ -177,7 +177,7 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
 
     # Step 3: No knowledge match found — evaluate reason
     if not chunks:
-        gap_type = await _evaluate_no_match(req.query)
+        gap_type = await _evaluate_no_match(req.query, current_tenant.get("description"))
         print(f"[CHAT] No match. Gap type: {gap_type}")
 
         messages.append({"role": "user", "content": req.query})
@@ -403,17 +403,19 @@ def _is_greeting(query: str) -> bool:
 
 
 # --- Evaluate reason when no knowledge match found ---
-async def _evaluate_no_match(query: str) -> str:
+async def _evaluate_no_match(query: str, description: str = None) -> str:
     """Classify why no match was found: 'out_of_scope' or 'knowledge_gap'.
     
     Default to knowledge_gap unless clearly unrelated to any business.
     """
+    business_context = f"\nThis website is about: {description}" if description else ""
+    
     try:
         resp = await openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": (
-                    "The user asked a question to a business website chatbot but no answer was found.\n\n"
+                    f"The user asked a question to a business website chatbot but no answer was found.{business_context}\n\n"
                     "Is this CLEARLY unrelated to any business website? (sports, weather, politics, celebrities, "
                     "jokes, coding, math, personal opinions, unrelated trivia)\n"
                     "- YES → OUT_OF_SCOPE\n"

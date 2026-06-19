@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { privateAxios } from '../utils/axios';
 import { useStore, hasAccess } from '../store';
-import { Copy, Check, RotateCw, Globe, Key, HelpCircle, Code, Plus, Trash2, Lock } from 'lucide-react';
+import { Copy, Check, RotateCw, Globe, Key, HelpCircle, Code, Plus, Trash2, Lock, FileText, RefreshCw } from 'lucide-react';
 
 const Settings = () => {
   const { state } = useStore();
@@ -12,6 +12,8 @@ const Settings = () => {
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [rbacError, setRbacError] = useState<string | null>(null);
+  const [description, setDescription] = useState('');
+  const [savingDesc, setSavingDesc] = useState(false);
 
   const isEditor = hasAccess(state.role, 'write');
   const isAdmin = hasAccess(state.role, 'delete');
@@ -26,6 +28,7 @@ const Settings = () => {
       setMe(res.data);
       setManualQuestions(res.data.suggested_questions_manual || []);
       setAutoQuestions(res.data.suggested_questions_auto || []);
+      setDescription(res.data.description || '');
     } catch (err) {
       console.error(err);
     }
@@ -47,6 +50,22 @@ const Settings = () => {
       setMe((prev: any) => prev ? { ...prev, api_key: res.data.api_key } : null);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const saveDescription = async () => {
+    if (!isEditor) {
+      triggerRbacError("You do not have Editor permissions to update the business description.");
+      return;
+    }
+    setSavingDesc(true);
+    try {
+      await privateAxios.put('/tenants/description', null, { params: { description } });
+      setMe((prev: any) => prev ? { ...prev, description } : null);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSavingDesc(false);
     }
   };
 
@@ -178,6 +197,34 @@ const Settings = () => {
             <p className="text-xs text-slate-400">
               Only requests coming from domain name <strong className="text-white font-bold">{me.domain}</strong> are processed.
             </p>
+          </div>
+
+          {/* Business Description */}
+          <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800/80 shadow-lg space-y-4">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <FileText size={18} className="text-amber-400" />
+              <span>Business Description</span>
+            </h3>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Auto-generated from your website content. Used by the AI to classify queries as knowledge gaps vs out-of-scope.
+            </p>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              placeholder="Describe what your business does..."
+              className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-xs text-slate-200 focus:border-violet-600 focus:outline-none transition-all resize-none"
+            />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={saveDescription}
+                disabled={savingDesc || !isEditor}
+                className="px-4 py-2 bg-amber-600 text-xs font-semibold text-white rounded-lg shadow-sm hover:bg-amber-700 transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                {savingDesc ? 'Saving...' : 'Save Description'}
+              </button>
+              {!isEditor && <Lock size={14} className="text-slate-500" />}
+            </div>
           </div>
         </div>
 

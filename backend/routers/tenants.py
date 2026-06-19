@@ -22,6 +22,7 @@ async def register(tenant: TenantRegister):
         "domain": tenant.domain,
         "plan": tenant.plan,
         "theme": tenant.theme,
+        "description": tenant.description,
         "password_hash": get_password_hash(tenant.password),
         "suggested_questions_manual": [],
         "suggested_questions_auto": [],
@@ -47,6 +48,7 @@ async def get_me(current_tenant: dict = Depends(get_current_tenant)):
         "domain": current_tenant["domain"],
         "plan": current_tenant.get("plan", "free"),
         "theme": current_tenant.get("theme", "default"),
+        "description": current_tenant.get("description"),
         "api_key": current_tenant["api_key"],
         "suggested_questions_manual": current_tenant.get("suggested_questions_manual", []),
         "suggested_questions_auto": current_tenant.get("suggested_questions_auto", []),
@@ -60,6 +62,14 @@ async def rotate_key(current_tenant: dict = Depends(get_current_tenant)):
         {"$set": {"api_key": new_api_key}}
     )
     return {"api_key": new_api_key}
+
+@router.put("/description")
+async def update_description(description: str, current_tenant: dict = Depends(get_current_tenant)):
+    await db.tenants.update_one(
+        {"tenant_id": current_tenant["tenant_id"]},
+        {"$set": {"description": description}}
+    )
+    return {"status": "ok", "description": description}
 
 @router.get("/stats")
 async def get_stats(current_tenant: dict = Depends(get_current_tenant)):
