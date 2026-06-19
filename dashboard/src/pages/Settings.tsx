@@ -192,11 +192,21 @@ const Settings = () => {
           <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800/80 shadow-lg space-y-2">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <Globe size={18} className="text-teal-400" />
-              <span>Allowed Host Domain</span>
+              <span>Business Info</span>
             </h3>
-            <p className="text-xs text-slate-400">
-              Only requests coming from domain name <strong className="text-white font-bold">{me.domain}</strong> are processed.
-            </p>
+            <div className="space-y-1">
+              <p className="text-xs text-slate-400">
+                Business name: <strong className="text-white font-bold">{me.business_name || 'Not set'}</strong>
+              </p>
+              <p className="text-xs text-slate-400">
+                Domain: <strong className="text-white font-bold">{me.domain}</strong>
+              </p>
+              {me.email && (
+                <p className="text-xs text-slate-400">
+                  Email: <strong className="text-white font-bold">{me.email}</strong>
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Business Description */}

@@ -52,7 +52,7 @@ def _check_rate_limit(key: str, limits: dict, max_reqs: int) -> bool:
 @limiter.limit("60/minute")
 async def chat(request: Request, req: ChatRequest, fastapi_response: Response, current_tenant: dict = Depends(verify_api_key)):
     tenant_id = current_tenant["tenant_id"]
-    domain = current_tenant["domain"]
+    business_name = current_tenant.get("business_name") or current_tenant["domain"]
     message_id = str(uuid.uuid4())
 
     # --- Max query length ---
@@ -118,7 +118,7 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
     # Step 1: Fast greeting check (regex, no LLM)
     if _is_greeting(req.query):
         print(f"[CHAT] Greeting detected: '{req.query}'")
-        answer = f"Hello! Welcome to {domain}. How can I help you today?"
+        answer = f"Hello! Welcome to {business_name}. How can I help you today?"
         await db.visitors.update_one(
             {"session_id": session_id},
             {"$addToSet": {"conversation_ids": session_id},
@@ -183,9 +183,9 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
         messages.append({"role": "user", "content": req.query})
 
         if gap_type == "out_of_scope":
-            no_match_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. The user's question is unrelated to our business. Politely let them know you can only help with questions about {domain}. CRITICAL: You MUST ONLY reply in English, Hindi, or Hinglish. If the user writes in English, reply in English. If the user writes in Hindi (Devanagari script), reply in Hindi. If the user writes in Hinglish, reply in Hinglish. NEVER use any other language."""
+            no_match_prompt = f"""You are a representative of {business_name} — always speak as "we" and "our", never as "{business_name}" or a third party. The user's question is unrelated to our business. Politely let them know you can only help with questions about {business_name}. CRITICAL: You MUST ONLY reply in English, Hindi, or Hinglish. If the user writes in English, reply in English. If the user writes in Hindi (Devanagari script), reply in Hindi. If the user writes in Hinglish, reply in Hinglish. NEVER use any other language."""
         else:
-            no_match_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. You do not have any information to answer the user's question, so do not make up content and do not answer unrelated questions. CRITICAL: You MUST ONLY reply in English, Hindi, or Hinglish (a mix of Hindi and English). If the user writes in English, reply in English. If the user writes in Hindi (Devanagari script), reply in Hindi. If the user writes in Hinglish (Hindi written in English script), reply in Hinglish. NEVER use any other language. However, if the user is asking about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]. Otherwise, politely say you don't have that information."""
+            no_match_prompt = f"""You are a representative of {business_name} — always speak as "we" and "our", never as "{business_name}" or a third party. You do not have any information to answer the user's question, so do not make up content and do not answer unrelated questions. CRITICAL: You MUST ONLY reply in English, Hindi, or Hinglish (a mix of Hindi and English). If the user writes in English, reply in English. If the user writes in Hindi (Devanagari script), reply in Hindi. If the user writes in Hinglish (Hindi written in English script), reply in Hinglish. NEVER use any other language. However, if the user is asking about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]. Otherwise, politely say you don't have that information."""
 
         if summary:
             no_match_prompt += f"\n\nHere is a summary of the conversation so far:\n{summary}"
@@ -257,9 +257,9 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
             seen_sources.add(source_key)
 
     if not needs_search:
-        system_prompt = f"You are a representative of {domain}. Respond conversationally to the user using 'we' and 'our', never referring to yourself as a third party. Do not answer questions unrelated to {domain}. CRITICAL: You MUST ONLY reply in English, Hindi, or Hinglish (a mix of Hindi and English). If the user writes in English, reply in English. If the user writes in Hindi (Devanagari script), reply in Hindi. If the user writes in Hinglish (Hindi written in English script), reply in Hinglish. NEVER use any other language. If the user asks about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]."
+        system_prompt = f"You are a representative of {business_name}. Respond conversationally to the user using 'we' and 'our', never referring to yourself as a third party. Do not answer questions unrelated to {business_name}. CRITICAL: You MUST ONLY reply in English, Hindi, or Hinglish (a mix of Hindi and English). If the user writes in English, reply in English. If the user writes in Hindi (Devanagari script), reply in Hindi. If the user writes in Hinglish (Hindi written in English script), reply in Hinglish. NEVER use any other language. If the user asks about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]."
     else:
-        system_prompt = f"""You are a representative of {domain} — always speak as "we" and "our", never as "{domain}" or a third party. Answer the user's question based on the provided context. Do not make up information that isn't in the context.
+        system_prompt = f"""You are a representative of {business_name} — always speak as "we" and "our", never as "{business_name}" or a third party. Answer the user's question based on the provided context. Do not make up information that isn't in the context.
 The user is currently on page: {req.current_url} titled {req.current_page_title}.
 Context: {context_text}
 CRITICAL: You MUST ONLY reply in English, Hindi, or Hinglish (a mix of Hindi and English). If the user writes in English, reply in English. If the user writes in Hindi (Devanagari script), reply in Hindi. If the user writes in Hinglish (Hindi written in English script), reply in Hinglish. NEVER use any other language. Ignore the language of the context above — always respond in the user's language from the allowed set.

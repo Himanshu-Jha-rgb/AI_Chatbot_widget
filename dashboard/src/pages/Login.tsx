@@ -7,6 +7,8 @@ const Login = () => {
   const [isRegister, setIsRegister] = useState(false);
   const [domain, setDomain] = useState('');
   const [password, setPassword] = useState('');
+  const [businessName, setBusinessName] = useState('');
+  const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -22,7 +24,12 @@ const Login = () => {
     const endpoint = isRegister ? '/tenants/register' : '/tenants/login';
 
     try {
-      const res = await publicAxios.post(endpoint, { domain, password });
+      const payload: any = { domain, password };
+      if (isRegister) {
+        payload.business_name = businessName;
+        payload.email = email;
+      }
+      const res = await publicAxios.post(endpoint, payload);
       localStorage.setItem('token', res.data.access_token);
       navigate('/');
     } catch (err: any) {
@@ -56,6 +63,38 @@ const Login = () => {
           )}
 
           <form className="space-y-6" onSubmit={handleSubmit}>
+            {isRegister && (
+              <>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+                    Business Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Your Company Name"
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                    required
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-slate-200 placeholder-slate-600 focus:border-violet-600 focus:outline-none transition-all duration-200 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="you@company.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-slate-200 placeholder-slate-600 focus:border-violet-600 focus:outline-none transition-all duration-200 text-sm"
+                  />
+                </div>
+              </>
+            )}
+
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
                 Domain name

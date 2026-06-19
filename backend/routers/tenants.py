@@ -20,6 +20,8 @@ async def register(tenant: TenantRegister):
         "tenant_id": tenant_id,
         "api_key": api_key,
         "domain": tenant.domain,
+        "business_name": tenant.business_name,
+        "email": tenant.email,
         "plan": tenant.plan,
         "theme": tenant.theme,
         "description": tenant.description,
@@ -46,6 +48,8 @@ async def get_me(current_tenant: dict = Depends(get_current_tenant)):
     return {
         "tenant_id": current_tenant["tenant_id"],
         "domain": current_tenant["domain"],
+        "business_name": current_tenant.get("business_name"),
+        "email": current_tenant.get("email"),
         "plan": current_tenant.get("plan", "free"),
         "theme": current_tenant.get("theme", "default"),
         "description": current_tenant.get("description"),

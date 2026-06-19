@@ -5,6 +5,8 @@ from datetime import datetime
 class TenantRegister(BaseModel):
     domain: str
     password: str
+    business_name: str
+    email: str
     plan: Optional[str] = "free"
     theme: Optional[str] = "default"
     description: Optional[str] = None
