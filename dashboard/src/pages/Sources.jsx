@@ -74,6 +74,13 @@ const Sources = () => {
 
   useEffect(() => { fetchSources(); }, []);
 
+  useEffect(() => {
+    const hasIndexing = sources.some(s => s.status === 'indexing');
+    if (!hasIndexing) return;
+    const interval = setInterval(fetchSources, 3000);
+    return () => clearInterval(interval);
+  }, [sources]);
+
   const handleDelete = async (source) => {
     setDeleting(true);
     const token = localStorage.getItem('token');
@@ -190,7 +197,9 @@ const Sources = () => {
                         {isWebsite && source.config?.pages_found ? ` · ${source.config.pages_found} pages` : ''}
                       </div>
                     </div>
-                    <span className="pill pill-ok" style={{ flexShrink: 0 }}>Ready</span>
+                    <span className={`pill ${source.status === 'ready' ? 'pill-ok' : source.status === 'indexing' ? 'pill-warn' : source.status === 'failed' ? 'pill-danger' : 'pill-ok'}`} style={{ flexShrink: 0 }}>
+                      {source.status === 'indexing' ? 'Indexing...' : source.status === 'failed' ? 'Failed' : 'Ready'}
+                    </span>
                     <button className="btn btn-sm btn-danger" onClick={() => setDeleteTarget(source)} style={{ marginLeft: '8px' }}>
                       Delete
                     </button>

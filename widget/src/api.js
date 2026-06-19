@@ -1,6 +1,18 @@
 const DEFAULT_API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
 
+const SESSION_STORAGE_KEY = "chat_session_id";
+
+export const getOrCreateSessionId = () => {
+    let id = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!id) {
+        id = crypto.randomUUID();
+        localStorage.setItem(SESSION_STORAGE_KEY, id);
+    }
+    return id;
+};
+
 export const chat = async (query, current_url, current_page_title, apiKey, apiBaseUrl = DEFAULT_API_BASE_URL) => {
+    const session_id = getOrCreateSessionId();
     const response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}/chat`, {
         method: "POST",
         headers: {
@@ -10,6 +22,7 @@ export const chat = async (query, current_url, current_page_title, apiKey, apiBa
         credentials: "include",
         body: JSON.stringify({
             query,
+            session_id,
             current_url,
             current_page_title
         })

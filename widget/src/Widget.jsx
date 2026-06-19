@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { chat, submitEnquiry, getWidgetConfig, submitFeedback } from './api';
+import { chat, submitEnquiry, getWidgetConfig, submitFeedback, getOrCreateSessionId } from './api';
 import ReactMarkdown from 'react-markdown';
 
 const ACCENT_FALLBACK = '#4F46E5';
@@ -154,9 +154,16 @@ function TypingIndicator({ accent, isDark }) {
     );
 }
 
+const MESSAGES_STORAGE_KEY = "chat_messages";
+
 export const Widget = ({ apiKey, apiBaseUrl }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const [messages, setMessages] = useState([]);
+    const [messages, setMessages] = useState(() => {
+        try {
+            const saved = localStorage.getItem(MESSAGES_STORAGE_KEY);
+            return saved ? JSON.parse(saved) : [];
+        } catch { return []; }
+    });
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [formData, setFormData] = useState({ name: '', email: '', phone: '' });
@@ -222,6 +229,12 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages, isLoading]);
 
+    useEffect(() => {
+        try {
+            localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(messages));
+        } catch {}
+    }, [messages]);
+
     const clearEnquiryForms = useCallback(() => {
         setMessages(prev => prev.map(m => {
             if (m.role === 'assistant' && m.showEnquiryForm && !m.enquirySubmitted) {
@@ -267,11 +280,6 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
         const { name, email, phone } = formData;
         if (!name.trim() || !email.trim()) return;
 
-        const getSessionId = () => {
-            const match = document.cookie.match(/(?:^|;\s*)chat_session_id=([^;]*)/);
-            return match ? decodeURIComponent(match[1]) : '';
-        };
-
         const contextMessages = messages.slice(Math.max(0, msgIndex - 5), msgIndex + 1);
         const contextText = contextMessages
             .map(m => `${m.role === 'user' ? 'Visitor' : 'Bot'}: ${m.content}`)
@@ -283,7 +291,7 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
                 email: email.trim(),
                 phone: phone.trim(),
                 message: contextText,
-                session_id: getSessionId(),
+                session_id: getOrCreateSessionId(),
             }, apiKey, apiBaseUrl);
 
             setMessages(prev => prev.map((m, i) =>
@@ -298,13 +306,8 @@ export const Widget = ({ apiKey, apiBaseUrl }) => {
         const msg = messages[msgIndex];
         if (!msg || !msg.messageId || msg.feedback === rating) return;
 
-        const getSessionId = () => {
-            const match = document.cookie.match(/(?:^|;\s*)chat_session_id=([^;]*)/);
-            return match ? decodeURIComponent(match[1]) : '';
-        };
-
         try {
-            await submitFeedback(msg.messageId, getSessionId(), rating, apiKey, apiBaseUrl);
+            await submitFeedback(msg.messageId, getOrCreateSessionId(), rating, apiKey, apiBaseUrl);
             setMessages(prev => prev.map((m, i) =>
                 i === msgIndex ? { ...m, feedback: rating } : m
             ));
