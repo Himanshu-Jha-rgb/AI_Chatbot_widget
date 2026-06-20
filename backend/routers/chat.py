@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, Request, Response, HTTPException
+from fastapi import APIRouter, Depends, Request, Response, HTTPException, WebSocket, WebSocketDisconnect, Query
 from models.schemas import ChatRequest, ChatResponse, Source, FeedbackRequest
-from core.auth import verify_api_key, db, limiter
+from core.auth import verify_api_key, db, limiter, hash_api_key
 from core.config import settings
 from services.vector_search import search_chunks
 from services.embedder import openai_client
@@ -30,6 +30,7 @@ MAX_QUERY_LENGTH = 500
 PER_TENANT_RATE_LIMIT = 100
 PER_SESSION_RATE_LIMIT = 20
 RATE_WINDOW_SECONDS = 60
+DIRECT_ANSWER_THRESHOLD = 0.75
 
 # In-memory sliding window rate limiters (reset on server restart)
 _tenant_limits: dict[str, deque] = defaultdict(deque)
@@ -132,7 +133,6 @@ async def chat(request: Request, req: ChatRequest, fastapi_response: Response, c
 
     chunks = []
     top_score = 0.0
-    DIRECT_ANSWER_THRESHOLD = 0.75
 
     if needs_search:
         chunks = await search_chunks(tenant_id, search_query)
@@ -343,6 +343,232 @@ async def submit_feedback(req: FeedbackRequest, current_tenant: dict = Depends(v
         upsert=True,
     )
     return {"status": "ok"}
+
+
+@router.websocket("/ws/chat")
+async def websocket_chat(websocket: WebSocket, key_hash: str = Query(...)):
+    await websocket.accept()
+
+    # --- Authenticate via hashed API key ---
+    tenant = await db.tenants.find_one({"api_key_hash": key_hash})
+    if not tenant:
+        await websocket.close(code=4001, reason="Invalid API key")
+        return
+
+    await websocket.send_json({"type": "authenticated"})
+
+    try:
+        while True:
+            raw = await websocket.receive_text()
+            data = json.loads(raw)
+
+            if data.get("type") != "message":
+                await websocket.send_json({"type": "error", "detail": "Unknown message type"})
+                continue
+
+            query = data.get("query", "").strip()
+            current_url = data.get("current_url", "")
+            current_page_title = data.get("current_page_title", "")
+            session_id = data.get("session_id") or str(uuid.uuid4())
+
+            if not query:
+                await websocket.send_json({"type": "error", "detail": "Empty query"})
+                continue
+
+            if len(query) > MAX_QUERY_LENGTH:
+                await websocket.send_json({"type": "error", "detail": "Query too long"})
+                continue
+
+            tenant_id = tenant["tenant_id"]
+            business_name = tenant.get("business_name") or tenant["domain"]
+            message_id = str(uuid.uuid4())
+
+            # --- Rate limits ---
+            if not _check_rate_limit(tenant_id, _tenant_limits, PER_TENANT_RATE_LIMIT):
+                await websocket.send_json({"type": "error", "detail": "Too many requests. Please slow down."})
+                continue
+
+            if not _check_rate_limit(session_id, _session_limits, PER_SESSION_RATE_LIMIT):
+                await websocket.send_json({"type": "error", "detail": "Too many requests. Please slow down."})
+                continue
+
+            # --- Visitor tracking ---
+            now = datetime.now(timezone.utc)
+            try:
+                await db.visitors.update_one(
+                    {"session_id": session_id},
+                    {"$set": {"last_seen_at": now, "tenant_id": tenant_id},
+                     "$setOnInsert": {"session_id": session_id, "first_seen_at": now, "conversation_ids": [], "total_messages": 0}},
+                    upsert=True
+                )
+            except Exception:
+                pass
+
+            # --- Greeting fast-path ---
+            if _is_greeting(query):
+                answer = f"Hello! Welcome to {business_name}. How can I help you today?"
+                await websocket.send_json({"type": "token", "content": answer})
+                await websocket.send_json({"type": "done", "message_id": message_id})
+                try:
+                    await db.visitors.update_one(
+                        {"session_id": session_id},
+                        {"$addToSet": {"conversation_ids": session_id}, "$inc": {"total_messages": 1}}
+                    )
+                except Exception:
+                    pass
+                continue
+
+            # --- Query rewrite + vector search ---
+            search_query, needs_search, _ = await _rewrite_search_query(query)
+
+            chunks = []
+            top_score = 0.0
+            if needs_search:
+                chunks = await search_chunks(tenant_id, search_query)
+                if chunks:
+                    top_score = chunks[0].get("score", 0.0)
+
+            if chunks and top_score < DIRECT_ANSWER_THRESHOLD:
+                chunks = []
+
+            # --- Conversation history ---
+            cache_key = f"chat_session:{session_id}"
+            summary = ""
+            messages = []
+            try:
+                cached_data_str = await redis_client.get(cache_key)
+                if cached_data_str:
+                    cached_data = json.loads(cached_data_str)
+                    summary = cached_data.get("summary", "")
+                    messages = cached_data.get("messages", [])
+            except Exception:
+                pass
+
+            if not messages and not summary:
+                session = await db.conversations.find_one({"session_id": session_id})
+                if session:
+                    summary = session.get("summary", "")
+                    messages = session.get("messages", [])
+
+            # --- Build prompt ---
+            if not chunks:
+                gap_type = await _evaluate_no_match(query, tenant.get("description"))
+                messages.append({"role": "user", "content": query})
+
+                if gap_type == "out_of_scope":
+                    system_prompt = f"You are a representative of {business_name} — always speak as \"we\" and \"our\", never as \"{business_name}\" or a third party. The user's question is unrelated to our business. Politely let them know you can only help with questions about {business_name}. CRITICAL: You MUST ONLY reply in English, Hindi, or Hinglish. If the user writes in English, reply in English. If the user writes in Hindi (Devanagari script), reply in Hindi. If the user writes in Hinglish, reply in Hinglish. NEVER use any other language."
+                else:
+                    description = tenant.get("description", "")
+                    description_context = f"\n\nAbout this website: {description}" if description else ""
+                    system_prompt = f"""You are a representative of {business_name} — always speak as "we" and "our", never as "{business_name}" or a third party.{description_context}
+If the user asks about this website, what it does, or what it offers, use the description above to provide a helpful overview. Do not make up information beyond what is provided. CRITICAL: You MUST ONLY reply in English, Hindi, or Hinglish (a mix of Hindi and English). If the user writes in English, reply in English. If the user writes in Hindi (Devanagari script), reply in Hindi. If the user writes in Hinglish (Hindi written in English script), reply in Hinglish. NEVER use any other language. However, if the user is asking about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]. Otherwise, politely say you don't have that information."""
+
+                if summary:
+                    system_prompt += f"\n\nHere is a summary of the conversation so far:\n{summary}"
+
+                sources_to_send = []
+            else:
+                context_text = "\n\n".join([_format_context_chunk(c) for c in chunks])
+
+                sources_to_send = []
+                seen_sources = set()
+                for c in chunks:
+                    section_title = c.get("section_title")
+                    section_path = c.get("section_path")
+                    source_key = (c["url"], section_path or section_title or "")
+                    if source_key not in seen_sources:
+                        sources_to_send.append({"url": c["url"], "title": c.get("title") or "Relevant Page", "section_title": section_title, "section_path": section_path})
+                        seen_sources.add(source_key)
+
+                if not needs_search:
+                    system_prompt = f"You are a representative of {business_name}. Respond conversationally to the user using 'we' and 'our', never referring to yourself as a third party. Do not answer questions unrelated to {business_name}. CRITICAL: You MUST ONLY reply in English, Hindi, or Hinglish (a mix of Hindi and English). If the user writes in English, reply in English. If the user writes in Hindi (Devanagari script), reply in Hindi. If the user writes in Hinglish (Hindi written in English script), reply in Hinglish. NEVER use any other language. If the user asks about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]."
+                else:
+                    system_prompt = f"""You are a representative of {business_name} — always speak as "we" and "our", never as "{business_name}" or a third party. Answer the user's question based on the provided context. Do not make up information that isn't in the context.
+The user is currently on page: {current_url} titled {current_page_title}.
+Context: {context_text}
+CRITICAL: You MUST ONLY reply in English, Hindi, or Hinglish (a mix of Hindi and English). If the user writes in English, reply in English. If the user writes in Hindi (Devanagari script), reply in Hindi. If the user writes in Hinglish (Hindi written in English script), reply in Hinglish. NEVER use any other language. Ignore the language of the context above — always respond in the user's language from the allowed set.
+If the user asks about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]."""
+
+                if summary:
+                    system_prompt += f"\n\nHere is a summary of the conversation so far:\n{summary}"
+
+                gap_type = None
+                messages.append({"role": "user", "content": query})
+
+            # --- Send sources before streaming ---
+            if sources_to_send:
+                await websocket.send_json({"type": "sources", "data": sources_to_send})
+
+            # --- Stream LLM response ---
+            api_messages = [{"role": "system", "content": system_prompt}] + messages[-MAX_HISTORY:]
+            full_answer = ""
+            show_form = False
+
+            try:
+                stream = await openai_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=api_messages,
+                    stream=True,
+                )
+                async for chunk in stream:
+                    delta = chunk.choices[0].delta
+                    if delta.content:
+                        full_answer += delta.content
+                        await websocket.send_json({"type": "token", "content": delta.content})
+            except Exception as e:
+                print(f"[WS] Stream error: {e}")
+                await websocket.send_json({"type": "error", "detail": "Failed to generate response"})
+                continue
+
+            # --- Post-processing ---
+            show_form = "[ENQUIRY_FORM]" in full_answer
+            if show_form:
+                full_answer = full_answer.replace("[ENQUIRY_FORM]", "").strip()
+                await websocket.send_json({"type": "enquiry_form"})
+
+            messages.append({"role": "assistant", "content": full_answer})
+
+            # --- Summarization compaction ---
+            if len(messages) >= 10:
+                messages_to_keep = messages[-4:]
+                messages_to_summarize = messages[:-4]
+                summary = await _summarize_past_context(summary, messages_to_summarize)
+                messages = messages_to_keep
+
+            # --- Persist conversation ---
+            try:
+                await db.conversations.update_one(
+                    {"session_id": session_id},
+                    {"$set": {"tenant_id": tenant_id, "current_url": current_url, "summary": summary, "messages": messages}},
+                    upsert=True
+                )
+                await redis_client.setex(cache_key, 3600, json.dumps({"summary": summary, "messages": messages}))
+            except Exception:
+                pass
+
+            # --- Visitor tracking ---
+            try:
+                await db.visitors.update_one(
+                    {"session_id": session_id},
+                    {"$addToSet": {"conversation_ids": session_id}, "$inc": {"total_messages": 1}}
+                )
+            except Exception:
+                pass
+
+            # --- Knowledge gap logging ---
+            if not chunks and not show_form and gap_type:
+                await _log_knowledge_gap(tenant_id, query, current_url, gap_type, message_id)
+
+            await websocket.send_json({"type": "done", "message_id": message_id})
+
+    except WebSocketDisconnect:
+        print(f"[WS] Client disconnected")
+    except Exception as e:
+        print(f"[WS] Error: {e}")
+        try:
+            await websocket.close(code=1011, reason="Internal server error")
+        except Exception:
+            pass
 
 
 def _format_context_chunk(chunk: dict) -> str:

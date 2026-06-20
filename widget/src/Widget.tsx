@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo, CSSProperties } from 'react';
-import { chat, submitEnquiry, getWidgetConfig, submitFeedback, apiClient } from './api';
+import { submitEnquiry, getWidgetConfig, submitFeedback, apiClient } from './api';
 import { WidgetProps, Message } from './types';
 import { getPalette } from './utils/theme';
 import { useHostTheme } from './hooks/useHostTheme';
@@ -44,6 +44,7 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   useStyleInjection();
   const hostTheme = useHostTheme();
@@ -89,12 +90,21 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
   }, [messages, apiKey]);
 
   useEffect(() => {
-    // Scroll to bottom on updates
     const timer = setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, SCROLL_INTO_VIEW_DELAY);
     return () => clearTimeout(timer);
   }, [messages, isLoading]);
+
+  // Cleanup WebSocket on unmount
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, []);
 
   const clearEnquiryForms = useCallback(() => {
     setMessages(prev => prev.map(m => {
@@ -103,6 +113,55 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
       }
       return m;
     }));
+  }, []);
+
+  const getWs = useCallback(async (): Promise<WebSocket> => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      return wsRef.current;
+    }
+
+    // Close any existing connection
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
+    const ws = await apiClient.connectChatSocket();
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        ws.close();
+        reject(new Error('WebSocket connection timeout'));
+      }, 10000);
+
+      ws.onopen = () => {
+        // Wait for authenticated message
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'authenticated') {
+          clearTimeout(timeout);
+          wsRef.current = ws;
+          resolve(ws);
+        }
+      };
+
+      ws.onerror = () => {
+        clearTimeout(timeout);
+        reject(new Error('WebSocket connection failed'));
+      };
+
+      ws.onclose = (event) => {
+        clearTimeout(timeout);
+        if (event.code === 4001) {
+          reject(new Error('Invalid API key'));
+        } else if (!wsRef.current) {
+          reject(new Error('WebSocket closed'));
+        }
+        wsRef.current = null;
+      };
+    });
   }, []);
 
   const handleSend = useCallback(async (text: string) => {
@@ -114,25 +173,133 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
     setMessages(prev => [...prev, userMsg]);
     setIsLoading(true);
 
+    // Add placeholder for streaming response
+    const assistantIndex = messages.length + 1; // +1 for the user message we just added
+    setMessages(prev => [...prev, {
+      role: 'assistant',
+      content: '',
+      isStreaming: true,
+      enquirySubmitted: false,
+      feedback: null,
+    }]);
+
     try {
-      const res = await chat(text, window.location.href, document.title);
-      const botMsg: Message = {
-        role: 'assistant',
-        messageId: res.message_id,
-        content: res.answer,
-        sources: res.sources,
-        showEnquiryForm: res.show_enquiry_form || false,
-        enquirySubmitted: false,
-        feedback: null,
+      const ws = await getWs();
+
+      // Set up message handler for this request
+      const originalOnMessage = ws.onmessage;
+      let messageComplete = false;
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        switch (data.type) {
+          case 'sources':
+            setMessages(prev => {
+              const updated = [...prev];
+              const idx = updated.length - 1;
+              if (updated[idx].role === 'assistant') {
+                updated[idx] = { ...updated[idx], sources: data.data };
+              }
+              return updated;
+            });
+            break;
+
+          case 'token':
+            setMessages(prev => {
+              const updated = [...prev];
+              const idx = updated.length - 1;
+              if (updated[idx].role === 'assistant') {
+                updated[idx] = { ...updated[idx], content: updated[idx].content + data.content };
+              }
+              return updated;
+            });
+            break;
+
+          case 'enquiry_form':
+            setMessages(prev => {
+              const updated = [...prev];
+              const idx = updated.length - 1;
+              if (updated[idx].role === 'assistant') {
+                updated[idx] = { ...updated[idx], showEnquiryForm: true };
+              }
+              return updated;
+            });
+            break;
+
+          case 'done':
+            messageComplete = true;
+            setMessages(prev => {
+              const updated = [...prev];
+              const idx = updated.length - 1;
+              if (updated[idx].role === 'assistant') {
+                updated[idx] = { ...updated[idx], messageId: data.message_id, isStreaming: false };
+              }
+              return updated;
+            });
+            ws.onmessage = originalOnMessage;
+            setIsLoading(false);
+            break;
+
+          case 'error':
+            messageComplete = true;
+            setMessages(prev => {
+              const updated = [...prev];
+              const idx = updated.length - 1;
+              if (updated[idx].role === 'assistant') {
+                updated[idx] = { ...updated[idx], content: data.detail || 'An error occurred.', isStreaming: false };
+              }
+              return updated;
+            });
+            ws.onmessage = originalOnMessage;
+            setIsLoading(false);
+            break;
+        }
       };
-      setMessages(prev => [...prev, botMsg]);
+
+      // Send the chat message
+      ws.send(JSON.stringify({
+        type: 'message',
+        query: text,
+        current_url: window.location.href,
+        current_page_title: document.title,
+        session_id: (() => {
+          const match = document.cookie.match(/(?:^|;\s*)chat_session_id=([^;]*)/);
+          return match ? decodeURIComponent(match[1]) : '';
+        })(),
+      }));
+
+      // Safety timeout — if stream doesn't complete in 60s, reset loading state
+      setTimeout(() => {
+        if (!messageComplete) {
+          setMessages(prev => {
+            const updated = [...prev];
+            const idx = updated.length - 1;
+            if (updated[idx]?.role === 'assistant' && updated[idx].isStreaming) {
+              updated[idx] = { ...updated[idx], isStreaming: false };
+            }
+            return updated;
+          });
+          ws.onmessage = originalOnMessage;
+          setIsLoading(false);
+        }
+      }, 60000);
+
     } catch (error) {
       console.error("Chat error:", error);
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, an error occurred.' }]);
-    } finally {
+      setMessages(prev => {
+        const updated = [...prev];
+        const idx = updated.length - 1;
+        if (updated[idx]?.role === 'assistant') {
+          updated[idx] = { ...updated[idx], content: 'Sorry, an error occurred.', isStreaming: false };
+        } else {
+          updated.push({ role: 'assistant', content: 'Sorry, an error occurred.' });
+        }
+        return updated;
+      });
       setIsLoading(false);
     }
-  }, [clearEnquiryForms]);
+  }, [clearEnquiryForms, getWs, messages.length]);
 
   const handleEnquirySubmit = useCallback(async (msgIndex: number, formData: { name: string; email: string; phone: string }) => {
     const getSessionId = () => {

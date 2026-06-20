@@ -35,6 +35,10 @@ export function useStyleInjection(): void {
         display: inline-block;
         animation: cwBounce 1.2s ease-in-out infinite;
       }
+      @keyframes cwCursorBlink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+      }
     `;
     document.head.appendChild(style);
   }, []);

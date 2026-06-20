@@ -13,6 +13,7 @@ export interface Message {
   showEnquiryForm?: boolean;
   enquirySubmitted?: boolean;
   feedback?: 'like' | 'dislike' | null;
+  isStreaming?: boolean;
 }
 
 export interface ThemeState {

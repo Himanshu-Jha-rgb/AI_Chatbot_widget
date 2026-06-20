@@ -120,6 +120,7 @@ export function MessageList({
             {m.role === 'user' ? (
               m.content
             ) : (
+              <>
               <ReactMarkdown
                 components={{
                   a: ({ href, children }) => (
@@ -152,6 +153,16 @@ export function MessageList({
               >
                 {m.content}
               </ReactMarkdown>
+              {m.isStreaming && (
+                <span
+                  className="inline-block w-[2px] h-[14px] ml-[2px] align-middle rounded-sm"
+                  style={{
+                    backgroundColor: accent,
+                    animation: 'cwCursorBlink 0.8s step-end infinite',
+                  }}
+                />
+              )}
+              </>
             )}
           </div>
 

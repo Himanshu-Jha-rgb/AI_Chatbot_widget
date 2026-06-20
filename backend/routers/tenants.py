@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Response
 from models.schemas import TenantRegister, TenantLogin, Token, SuggestedQuestionsUpdate
-from core.auth import db, get_password_hash, verify_password, create_access_token, get_current_tenant, set_auth_cookie, clear_auth_cookie
+from core.auth import db, get_password_hash, verify_password, create_access_token, get_current_tenant, set_auth_cookie, clear_auth_cookie, hash_api_key
 import uuid
 import secrets
 from datetime import datetime, timezone
@@ -19,6 +19,7 @@ async def register(tenant: TenantRegister, response: Response):
     await db.tenants.insert_one({
         "tenant_id": tenant_id,
         "api_key": api_key,
+        "api_key_hash": hash_api_key(api_key),
         "domain": tenant.domain,
         "business_name": tenant.business_name,
         "email": tenant.email,
@@ -70,7 +71,7 @@ async def rotate_key(current_tenant: dict = Depends(get_current_tenant)):
     new_api_key = f"sk_live_{secrets.token_urlsafe(32)}"
     await db.tenants.update_one(
         {"tenant_id": current_tenant["tenant_id"]},
-        {"$set": {"api_key": new_api_key}}
+        {"$set": {"api_key": new_api_key, "api_key_hash": hash_api_key(new_api_key)}}
     )
     return {"api_key": new_api_key}
 

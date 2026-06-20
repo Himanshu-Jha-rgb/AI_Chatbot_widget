@@ -91,6 +91,21 @@ async def cleanup_stale_jobs():
         print(f"Cleaned up {result.modified_count} stale crawl job(s)")
 
 @app.on_event("startup")
+async def backfill_api_key_hashes():
+    """Backfill api_key_hash for any existing tenants that don't have it."""
+    from core.auth import hash_api_key
+    cursor = db.tenants.find({"api_key_hash": {"$exists": False}}, {"tenant_id": 1, "api_key": 1})
+    count = 0
+    async for tenant in cursor:
+        await db.tenants.update_one(
+            {"_id": tenant["_id"]},
+            {"$set": {"api_key_hash": hash_api_key(tenant["api_key"])}}
+        )
+        count += 1
+    if count:
+        print(f"Backfilled api_key_hash for {count} existing tenant(s)")
+
+@app.on_event("startup")
 async def ensure_lookup_indexes():
     await db.parents.create_index([("tenant_id", 1), ("parent_id", 1)])
     await db.parents.create_index([("tenant_id", 1), ("source_id", 1)])

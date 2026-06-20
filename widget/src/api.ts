@@ -20,6 +20,13 @@ export interface EnquiryData {
   session_id: string;
 }
 
+async function sha256(message: string): Promise<string> {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 class ApiClient {
   private apiKey: string = '';
   private apiBaseUrl: string = DEFAULT_API_BASE_URL;
@@ -29,6 +36,14 @@ class ApiClient {
     if (apiBaseUrl) {
       this.apiBaseUrl = apiBaseUrl.replace(/\/$/, "");
     }
+  }
+
+  public async connectChatSocket(): Promise<WebSocket> {
+    const keyHash = await sha256(this.apiKey);
+    const protocol = this.apiBaseUrl.startsWith('https') ? 'wss' : 'ws';
+    const host = this.apiBaseUrl.replace(/^https?:\/\//, '');
+    const url = `${protocol}://${host}/ws/chat?key_hash=${keyHash}`;
+    return new WebSocket(url);
   }
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {

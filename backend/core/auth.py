@@ -1,4 +1,5 @@
 import os
+import hashlib
 from datetime import datetime, timedelta, timezone
 import bcrypt
 from jose import JWTError, jwt
@@ -27,6 +28,9 @@ def verify_password(plain_password, hashed_password):
 
 def get_password_hash(password):
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def hash_api_key(api_key: str) -> str:
+    return hashlib.sha256(api_key.encode('utf-8')).hexdigest()
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
