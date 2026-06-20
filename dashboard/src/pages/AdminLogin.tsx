@@ -20,8 +20,7 @@ const AdminLogin = () => {
     setLoading(true);
 
     try {
-      const res = await publicAxios.post('/admin/login', { username, password });
-      localStorage.setItem('adminToken', res.data.access_token);
+      await publicAxios.post('/admin/login', { username, password });
       navigate('/admin/tenants');
     } catch (err: any) {
       setError(err.response?.data?.detail || err.message || 'Login failed');

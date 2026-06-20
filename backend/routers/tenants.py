@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from models.schemas import TenantRegister, TenantLogin, Token, SuggestedQuestionsUpdate
-from core.auth import db, get_password_hash, verify_password, create_access_token, get_current_tenant
+from core.auth import db, get_password_hash, verify_password, create_access_token, get_current_tenant, set_auth_cookie, clear_auth_cookie
 import uuid
 import secrets
 from datetime import datetime, timezone
@@ -8,14 +8,14 @@ from datetime import datetime, timezone
 router = APIRouter(prefix="/tenants", tags=["tenants"])
 
 @router.post("/register", response_model=Token)
-async def register(tenant: TenantRegister):
+async def register(tenant: TenantRegister, response: Response):
     existing = await db.tenants.find_one({"domain": tenant.domain})
     if existing:
         raise HTTPException(status_code=400, detail="Domain already registered")
-        
+
     tenant_id = str(uuid.uuid4())
     api_key = f"sk_live_{secrets.token_urlsafe(32)}"
-    
+
     await db.tenants.insert_one({
         "tenant_id": tenant_id,
         "api_key": api_key,
@@ -30,18 +30,25 @@ async def register(tenant: TenantRegister):
         "suggested_questions_auto": [],
         "created_at": datetime.now(timezone.utc)
     })
-    
+
     access_token = create_access_token(data={"sub": tenant_id})
+    set_auth_cookie(response, access_token)
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/login", response_model=Token)
-async def login(tenant: TenantLogin):
+async def login(tenant: TenantLogin, response: Response):
     db_tenant = await db.tenants.find_one({"domain": tenant.domain})
     if not db_tenant or not verify_password(tenant.password, db_tenant["password_hash"]):
         raise HTTPException(status_code=400, detail="Incorrect domain or password")
-        
+
     access_token = create_access_token(data={"sub": db_tenant["tenant_id"]})
+    set_auth_cookie(response, access_token)
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.post("/logout")
+async def logout(response: Response):
+    clear_auth_cookie(response)
+    return {"message": "logged out"}
 
 @router.get("/me")
 async def get_me(current_tenant: dict = Depends(get_current_tenant)):
@@ -81,7 +88,6 @@ async def get_stats(current_tenant: dict = Depends(get_current_tenant)):
     pages = await db.pages.count_documents({"tenant_id": tenant_id})
     chunks = await db.chunks.count_documents({"tenant_id": tenant_id})
     queries = await db.conversations.count_documents({"tenant_id": tenant_id})
-    # Count website crawls as sources (at least one completed crawl = 1 website source)
     crawl_sources = await db.crawl_jobs.count_documents({"tenant_id": tenant_id, "status": "done"})
     doc_sources = await db.sources.count_documents({"tenant_id": tenant_id})
     return {

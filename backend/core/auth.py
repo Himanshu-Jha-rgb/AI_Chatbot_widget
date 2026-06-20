@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timedelta, timezone
 import bcrypt
 from jose import JWTError, jwt
-from fastapi import Depends, HTTPException, status, Request
+from fastapi import Depends, HTTPException, status, Request, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -12,6 +12,10 @@ from core.config import settings
 security = HTTPBearer()
 
 ALGORITHM = "HS256"
+
+TENANT_COOKIE_NAME = "access_token"
+ADMIN_COOKIE_NAME = "admin_token"
+COOKIE_MAX_AGE = 604800  # 7 days in seconds
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -34,13 +38,35 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET, algorithm=ALGORITHM)
     return encoded_jwt
 
-async def get_current_tenant(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    token = credentials.credentials
+def set_auth_cookie(response: Response, token: str, cookie_name: str = TENANT_COOKIE_NAME):
+    response.set_cookie(
+        key=cookie_name,
+        value=token,
+        max_age=COOKIE_MAX_AGE,
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+        path="/",
+    )
+
+def clear_auth_cookie(response: Response, cookie_name: str = TENANT_COOKIE_NAME):
+    response.delete_cookie(
+        key=cookie_name,
+        path="/",
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+    )
+
+async def get_current_tenant(request: Request):
+    token = request.cookies.get(TENANT_COOKIE_NAME)
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    if token is None:
+        raise credentials_exception
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[ALGORITHM])
         tenant_id: str = payload.get("sub")
@@ -48,24 +74,43 @@ async def get_current_tenant(credentials: HTTPAuthorizationCredentials = Depends
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-        
+
     tenant = await db.tenants.find_one({"tenant_id": tenant_id})
     if tenant is None:
         raise credentials_exception
     return tenant
 
+async def get_current_admin(request: Request):
+    token = request.cookies.get(ADMIN_COOKIE_NAME)
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate admin credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if token is None:
+        raise credentials_exception
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[ALGORITHM])
+        role: str = payload.get("role")
+        if role != "admin":
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    return {"username": "admin", "role": "admin"}
+
 async def verify_api_key(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)):
     api_key = credentials.credentials
     if not api_key.startswith("sk_live_"):
         raise HTTPException(status_code=403, detail="Invalid API Key format")
-        
+
     tenant = await db.tenants.find_one({"api_key": api_key})
     if not tenant:
         raise HTTPException(status_code=403, detail="Invalid API Key")
-        
+
     origin = request.headers.get("origin")
     if origin and settings.ENFORCE_DOMAIN and "localhost" not in origin:
         if tenant["domain"] not in origin:
             raise HTTPException(status_code=403, detail="Domain not allowed")
-        
+
     return tenant

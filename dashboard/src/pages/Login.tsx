@@ -29,8 +29,7 @@ const Login = () => {
         payload.business_name = businessName;
         payload.email = email;
       }
-      const res = await publicAxios.post(endpoint, payload);
-      localStorage.setItem('token', res.data.access_token);
+      await publicAxios.post(endpoint, payload);
       navigate('/');
     } catch (err: any) {
       setError(err.response?.data?.detail || err.message || 'Authentication failed');

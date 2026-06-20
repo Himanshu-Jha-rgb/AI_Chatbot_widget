@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { StoreProvider } from './store';
 import Layout from './components/Layout';
+import { privateAxios, adminAxios } from './utils/axios';
 
 // Pages
 import Login from './pages/Login';
@@ -21,14 +22,40 @@ import AdminTenants from './pages/AdminTenants';
 import { Link, useNavigate } from 'react-router-dom';
 import { Shield, Users, LogOut } from 'lucide-react';
 
+const AuthSpinner = () => (
+  <div className="flex h-screen items-center justify-center bg-slate-950">
+    <div className="h-8 w-8 animate-spin rounded-full border-4 border-violet-500 border-t-transparent" />
+  </div>
+);
+
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
-  const token = localStorage.getItem('token');
-  return token ? <Layout>{children}</Layout> : <Navigate to="/login" />;
+  const [checking, setChecking] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
+
+  useEffect(() => {
+    privateAxios.get('/tenants/me')
+      .then(() => setAuthenticated(true))
+      .catch(() => setAuthenticated(false))
+      .finally(() => setChecking(false));
+  }, []);
+
+  if (checking) return <AuthSpinner />;
+  return authenticated ? <Layout>{children}</Layout> : <Navigate to="/login" />;
 };
 
 const GuestRoute = ({ children }: { children: React.ReactNode }) => {
-  const token = localStorage.getItem('token');
-  return token ? <Navigate to="/" /> : <>{children}</>;
+  const [checking, setChecking] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
+
+  useEffect(() => {
+    privateAxios.get('/tenants/me')
+      .then(() => setAuthenticated(true))
+      .catch(() => setAuthenticated(false))
+      .finally(() => setChecking(false));
+  }, []);
+
+  if (checking) return <AuthSpinner />;
+  return authenticated ? <Navigate to="/" /> : <>{children}</>;
 };
 
 const AdminLayout = ({ children }: { children: React.ReactNode }) => {
@@ -38,8 +65,12 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
     document.title = "System Admin Dashboard";
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('adminToken');
+  const handleLogout = async () => {
+    try {
+      await adminAxios.post('/admin/logout');
+    } catch {
+      // Cookie may already be cleared
+    }
     navigate('/admin/login');
   };
 
@@ -94,13 +125,33 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
 };
 
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
-  const token = localStorage.getItem('adminToken');
-  return token ? <AdminLayout>{children}</AdminLayout> : <Navigate to="/admin/login" />;
+  const [checking, setChecking] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
+
+  useEffect(() => {
+    adminAxios.get('/admin/me')
+      .then(() => setAuthenticated(true))
+      .catch(() => setAuthenticated(false))
+      .finally(() => setChecking(false));
+  }, []);
+
+  if (checking) return <AuthSpinner />;
+  return authenticated ? <AdminLayout>{children}</AdminLayout> : <Navigate to="/admin/login" />;
 };
 
 const AdminGuestRoute = ({ children }: { children: React.ReactNode }) => {
-  const adminToken = localStorage.getItem('adminToken');
-  return adminToken ? <Navigate to="/admin/tenants" /> : <>{children}</>;
+  const [checking, setChecking] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
+
+  useEffect(() => {
+    adminAxios.get('/admin/me')
+      .then(() => setAuthenticated(true))
+      .catch(() => setAuthenticated(false))
+      .finally(() => setChecking(false));
+  }, []);
+
+  if (checking) return <AuthSpinner />;
+  return authenticated ? <Navigate to="/admin/tenants" /> : <>{children}</>;
 };
 
 const App = () => {
