@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { adminAxios } from '../utils/axios';
+import { formatDate } from '../utils/date';
 import { Tenant } from '../interfaces';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { Trash2, ShieldAlert } from 'lucide-react';
@@ -85,7 +86,7 @@ const AdminTenants = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-slate-400 text-sm">
-                    {new Date(tenant.created_at).toLocaleDateString()}
+                    {formatDate(tenant.created_at)}
                   </td>
                   <td className="px-6 py-4 font-mono text-xs text-slate-500">
                     {tenant.tenant_id}

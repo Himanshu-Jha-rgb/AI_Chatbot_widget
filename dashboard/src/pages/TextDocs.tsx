@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { privateAxios } from '../utils/axios';
+import { formatDate } from '../utils/date';
 import { TextDoc, Source } from '../interfaces';
 import { useStore, hasAccess } from '../store';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -171,7 +172,7 @@ const TextDocs = () => {
             {source && (
               <p className="text-xs text-slate-400 mt-1">
                 {docs.length} document{docs.length !== 1 ? 's' : ''} · {source.chunk_count || 0} chunks indexed
-                {source.last_indexed_at && ` · Last indexed: ${new Date(source.last_indexed_at).toLocaleDateString()}`}
+                {source.last_indexed_at && ` · Last indexed: ${formatDate(source.last_indexed_at)}`}
               </p>
             )}
           </div>

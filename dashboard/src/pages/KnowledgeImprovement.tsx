@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { privateAxios } from '../utils/axios';
+import { formatDate } from '../utils/date';
 import { useStore, hasAccess } from '../store';
 import { KnowledgeGap, Source } from '../interfaces';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -302,7 +303,7 @@ const KnowledgeImprovement = () => {
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-xxs font-semibold text-slate-500">
                     <span>Asked <strong className="text-slate-300">{gap.count}</strong> times</span>
                     {gap.url && <span className="truncate max-w-xs">on {new URL(gap.url).hostname}</span>}
-                    <span>Last seen: {new Date(gap.last_seen).toLocaleDateString()}</span>
+                    <span>Last seen: {formatDate(gap.last_seen)}</span>
                   </div>
 
                   {/* Similar FAQs */}

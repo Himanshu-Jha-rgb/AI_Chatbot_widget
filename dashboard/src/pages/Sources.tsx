@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { privateAxios } from '../utils/axios';
+import { formatDate } from '../utils/date';
 import { Source } from '../interfaces';
 import { useStore, hasAccess } from '../store';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -360,7 +361,7 @@ const Sources = () => {
                               <>
                                 <span>·</span>
                                 <Calendar size={12} />
-                                <span>{new Date(source.last_indexed_at).toLocaleDateString()}</span>
+                                <span>{formatDate(source.last_indexed_at)}</span>
                               </>
                             )}
                           </div>

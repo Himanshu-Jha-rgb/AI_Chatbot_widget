@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { privateAxios } from '../utils/axios';
+import { formatDate } from '../utils/date';
 import { useStore, hasAccess } from '../store';
 import { useRbacError } from '../hooks/useRbacError';
 import { RefreshCw, AlertCircle, History, Play, Lock } from 'lucide-react';
@@ -68,8 +69,6 @@ const Crawl = () => {
     }
     return () => clearInterval(interval);
   }, [jobId]);
-
-  const formatDate = (dt: string) => dt ? new Date(dt).toLocaleString() : '-';
 
   return (
     <div className="space-y-8 text-slate-100 animate-fadeIn">

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { privateAxios } from '../utils/axios';
+import { formatDate } from '../utils/date';
 import { Lead } from '../interfaces';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { Users, Mail, Phone, Calendar, MessageSquare } from 'lucide-react';
@@ -107,7 +108,7 @@ const Leads = () => {
                       <td className="px-6 py-4 text-slate-400">
                         <span className="flex items-center gap-1.5">
                           <Calendar size={14} className="text-slate-500" />
-                          {new Date(lead.created_at).toLocaleDateString()}
+                          {formatDate(lead.created_at)}
                         </span>
                       </td>
                     </tr>
