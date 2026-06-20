@@ -5,7 +5,6 @@ import { getPalette } from './utils/theme';
 import { useHostTheme } from './hooks/useHostTheme';
 import { useIsMobile } from './hooks/useIsMobile';
 import { useStyleInjection } from './hooks/useStyleInjection';
-import { TypingIndicator } from './components/TypingIndicator';
 import { Header } from './components/Header';
 import { FloatingButton } from './components/FloatingButton';
 import { MessageList } from './components/MessageList';
@@ -18,7 +17,8 @@ import {
   MOBILE_WIDGET_HEIGHT,
   DRAG_HANDLE_WIDTH,
   DRAG_HANDLE_HEIGHT,
-  SCROLL_INTO_VIEW_DELAY
+  SCROLL_INTO_VIEW_DELAY,
+  getSessionId
 } from './utils/constants';
 
 export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
@@ -174,7 +174,6 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
     setIsLoading(true);
 
     // Add placeholder for streaming response
-    const assistantIndex = messages.length + 1; // +1 for the user message we just added
     setMessages(prev => [...prev, {
       role: 'assistant',
       content: '',
@@ -263,10 +262,7 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
         query: text,
         current_url: window.location.href,
         current_page_title: document.title,
-        session_id: (() => {
-          const match = document.cookie.match(/(?:^|;\s*)chat_session_id=([^;]*)/);
-          return match ? decodeURIComponent(match[1]) : '';
-        })(),
+        session_id: getSessionId(),
       }));
 
       // Safety timeout — if stream doesn't complete in 60s, reset loading state
@@ -299,14 +295,9 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
       });
       setIsLoading(false);
     }
-  }, [clearEnquiryForms, getWs, messages.length]);
+  }, [clearEnquiryForms, getWs]);
 
   const handleEnquirySubmit = useCallback(async (msgIndex: number, formData: { name: string; email: string; phone: string }) => {
-    const getSessionId = () => {
-      const match = document.cookie.match(/(?:^|;\s*)chat_session_id=([^;]*)/);
-      return match ? decodeURIComponent(match[1]) : '';
-    };
-
     const contextMessages = messages.slice(Math.max(0, msgIndex - 5), msgIndex + 1);
     const contextText = contextMessages
       .map(m => `${m.role === 'user' ? 'Visitor' : 'Bot'}: ${m.content}`)
@@ -332,11 +323,6 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
   const handleFeedback = useCallback(async (msgIndex: number, rating: 'like' | 'dislike') => {
     const msg = messages[msgIndex];
     if (!msg || !msg.messageId || msg.feedback === rating) return;
-
-    const getSessionId = () => {
-      const match = document.cookie.match(/(?:^|;\s*)chat_session_id=([^;]*)/);
-      return match ? decodeURIComponent(match[1]) : '';
-    };
 
     try {
       await submitFeedback(msg.messageId, getSessionId(), rating);
@@ -435,13 +421,6 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
                 onFeedback={handleFeedback}
                 onEnquirySubmit={handleEnquirySubmit}
               />
-
-              {/* Typing indicator overlayed at the bottom of message list area */}
-              {isLoading && (
-                <div className="px-4 pb-3" style={{ background: palette.msgAreaBg }}>
-                  <TypingIndicator accent={accent} isDark={isDark} />
-                </div>
-              )}
 
               <div ref={messagesEndRef} />
             </div>

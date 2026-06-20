@@ -1,7 +1,9 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { privateAxios } from '../utils/axios';
 import { useStore, hasAccess } from '../store';
 import { KnowledgeGap, Source } from '../interfaces';
+import LoadingSpinner from '../components/LoadingSpinner';
+import { useRbacError } from '../hooks/useRbacError';
 import { 
   Sparkles, 
   TrendingUp,
@@ -25,7 +27,7 @@ const KnowledgeImprovement = () => {
   const [sources, setSources] = useState<Source[]>([]);
   const [resolving, setResolving] = useState<string | null>(null);
   const [faqForm, setFaqForm] = useState({ question: '', answer: '', source_id: '' });
-  const [rbacError, setRbacError] = useState<string | null>(null);
+  const { rbacError, triggerRbacError } = useRbacError();
 
   const isEditor = hasAccess(state.role, 'write');
 
@@ -53,11 +55,6 @@ const KnowledgeImprovement = () => {
   useEffect(() => {
     fetchGaps();
   }, [fetchGaps]);
-
-  const triggerRbacError = (msg: string) => {
-    setRbacError(msg);
-    setTimeout(() => setRbacError(null), 4000);
-  };
 
   const resolveGap = async (gapId: string, action: string, mergeIntoId?: string) => {
     if (!isEditor) {
@@ -119,12 +116,7 @@ const KnowledgeImprovement = () => {
   };
 
   if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-violet-500 border-t-transparent" />
-        <span className="ml-3 text-slate-400 font-medium">Loading knowledge gaps...</span>
-      </div>
-    );
+    return <LoadingSpinner message="Loading knowledge gaps..." />;
   }
 
   const stats = state.stats;

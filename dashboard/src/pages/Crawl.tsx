@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { privateAxios } from '../utils/axios';
 import { useStore, hasAccess } from '../store';
+import { useRbacError } from '../hooks/useRbacError';
 import { RefreshCw, AlertCircle, History, Play, Lock } from 'lucide-react';
 
 const Crawl = () => {
@@ -11,7 +12,7 @@ const Crawl = () => {
   const [history, setHistory] = useState<any[]>([]);
   const [isStarting, setIsStarting] = useState(false);
   const [crawlError, setCrawlError] = useState('');
-  const [rbacError, setRbacError] = useState<string | null>(null);
+  const { rbacError, triggerRbacError } = useRbacError();
 
   const isEditor = hasAccess(state.role, 'write');
 
@@ -27,11 +28,6 @@ const Crawl = () => {
   useEffect(() => {
     fetchHistory();
   }, []);
-
-  const triggerRbacError = (msg: string) => {
-    setRbacError(msg);
-    setTimeout(() => setRbacError(null), 4000);
-  };
 
   const handleCrawl = async () => {
     if (!isEditor) {

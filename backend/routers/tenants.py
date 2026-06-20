@@ -32,7 +32,7 @@ async def register(tenant: TenantRegister, response: Response):
         "created_at": datetime.now(timezone.utc)
     })
 
-    access_token = create_access_token(data={"sub": tenant_id})
+    access_token = create_access_token(data={"sub": tenant_id, "role": "tenant"})
     set_auth_cookie(response, access_token)
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -42,7 +42,7 @@ async def login(tenant: TenantLogin, response: Response):
     if not db_tenant or not verify_password(tenant.password, db_tenant["password_hash"]):
         raise HTTPException(status_code=400, detail="Incorrect domain or password")
 
-    access_token = create_access_token(data={"sub": db_tenant["tenant_id"]})
+    access_token = create_access_token(data={"sub": db_tenant["tenant_id"], "role": "tenant"})
     set_auth_cookie(response, access_token)
     return {"access_token": access_token, "token_type": "bearer"}
 

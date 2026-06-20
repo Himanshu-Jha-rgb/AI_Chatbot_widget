@@ -17,7 +17,7 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 async def admin_login(creds: AdminLogin, response: Response):
     if creds.username == ADMIN_USERNAME and creds.password == ADMIN_PASSWORD:
         access_token = create_access_token(data={"sub": "system_admin", "role": "admin"})
-        set_auth_cookie(response, access_token, cookie_name="admin_token")
+        set_auth_cookie(response, access_token)
         return {"access_token": access_token, "token_type": "bearer"}
 
     raise HTTPException(
@@ -28,7 +28,7 @@ async def admin_login(creds: AdminLogin, response: Response):
 
 @router.post("/logout")
 async def admin_logout(response: Response):
-    clear_auth_cookie(response, cookie_name="admin_token")
+    clear_auth_cookie(response)
     return {"message": "logged out"}
 
 @router.get("/me")

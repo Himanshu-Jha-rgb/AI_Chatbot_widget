@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { privateAxios } from '../utils/axios';
 import { useStore, hasAccess } from '../store';
+import LoadingSpinner from '../components/LoadingSpinner';
+import { useRbacError } from '../hooks/useRbacError';
 import { Copy, Check, RotateCw, Globe, Key, HelpCircle, Code, Plus, Trash2, Lock, FileText } from 'lucide-react';
 
 const Settings = () => {
@@ -11,7 +13,7 @@ const Settings = () => {
   const [newQuestion, setNewQuestion] = useState('');
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [rbacError, setRbacError] = useState<string | null>(null);
+  const { rbacError, triggerRbacError } = useRbacError();
   const [description, setDescription] = useState('');
   const [savingDesc, setSavingDesc] = useState(false);
 
@@ -33,11 +35,6 @@ const Settings = () => {
   useEffect(() => {
     fetchMe();
   }, []);
-
-  const triggerRbacError = (msg: string) => {
-    setRbacError(msg);
-    setTimeout(() => setRbacError(null), 4000);
-  };
 
   const rotateKey = async () => {
     if (!isAdmin) {
@@ -111,12 +108,7 @@ const Settings = () => {
   };
 
   if (!me) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-violet-500 border-t-transparent" />
-        <span className="ml-3 text-slate-400 font-medium">Loading settings...</span>
-      </div>
-    );
+    return <LoadingSpinner message="Loading settings..." />;
   }
 
   const widgetUrl = window.location.origin;

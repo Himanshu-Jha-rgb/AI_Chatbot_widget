@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -11,7 +10,7 @@ import {
   X,
   Bot
 } from 'lucide-react';
-import { clearSession } from '../api';
+import { publicAxios } from '../utils/axios';
 import { useStore } from '../store';
 
 interface SidebarProps {
@@ -24,8 +23,8 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
   const navigate = useNavigate();
   const { state, dispatch } = useStore();
 
-  const handleLogout = () => {
-    clearSession();
+  const handleLogout = async () => {
+    try { await publicAxios.post('/tenants/logout'); } catch {}
     dispatch({ type: 'RESET_STORE' });
     navigate('/login');
   };

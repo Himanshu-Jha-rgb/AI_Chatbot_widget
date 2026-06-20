@@ -1,4 +1,3 @@
-import React from 'react';
 import { useLocation } from 'react-router-dom';
 import { Menu, User, Bell } from 'lucide-react';
 import { useStore } from '../store';

@@ -1,12 +1,5 @@
 const DEFAULT_API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
 
-export interface ChatResponse {
-  message_id: string;
-  answer: string;
-  sources: any[];
-  show_enquiry_form?: boolean;
-}
-
 export interface WidgetConfig {
   theme?: string;
   suggested_questions?: string[];
@@ -67,14 +60,6 @@ class ApiClient {
     return response.json();
   }
 
-  public chat(query: string, current_url: string, current_page_title: string): Promise<ChatResponse> {
-    return this.request<ChatResponse>("/chat", {
-      method: "POST",
-      credentials: "include",
-      body: JSON.stringify({ query, current_url, current_page_title }),
-    });
-  }
-
   public getWidgetConfig(): Promise<WidgetConfig> {
     return this.request<WidgetConfig>("/widget/config", {
       method: "GET",
@@ -97,9 +82,6 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient();
-
-export const chat = (query: string, current_url: string, current_page_title: string) =>
-  apiClient.chat(query, current_url, current_page_title);
 
 export const getWidgetConfig = () =>
   apiClient.getWidgetConfig();

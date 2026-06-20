@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { privateAxios } from '../utils/axios';
 import { TextDoc, Source } from '../interfaces';
 import { useStore, hasAccess } from '../store';
+import LoadingSpinner from '../components/LoadingSpinner';
+import { useRbacError } from '../hooks/useRbacError';
 import { 
   ArrowLeft, 
   Plus, 
@@ -28,7 +30,7 @@ const TextDocs = () => {
   const [editTitle, setEditTitle] = useState('');
   const [editBody, setEditBody] = useState('');
   const [indexing, setIndexing] = useState(false);
-  const [rbacError, setRbacError] = useState<string | null>(null);
+  const { rbacError, triggerRbacError } = useRbacError();
 
   const isEditor = hasAccess(state.role, 'write');
   const isAdmin = hasAccess(state.role, 'delete');
@@ -57,11 +59,6 @@ const TextDocs = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
-  const triggerRbacError = (msg: string) => {
-    setRbacError(msg);
-    setTimeout(() => setRbacError(null), 4000);
-  };
 
   const addDoc = async () => {
     if (!isEditor) {
@@ -142,12 +139,7 @@ const TextDocs = () => {
   };
 
   if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-violet-500 border-t-transparent" />
-        <span className="ml-3 text-slate-400 font-medium">Loading Documents...</span>
-      </div>
-    );
+    return <LoadingSpinner message="Loading Documents..." />;
   }
 
   return (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { privateAxios } from '../utils/axios';
 import { ArrowLeft, UploadCloud, File, AlertCircle, CheckCircle } from 'lucide-react';

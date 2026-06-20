@@ -14,8 +14,7 @@ security = HTTPBearer()
 
 ALGORITHM = "HS256"
 
-TENANT_COOKIE_NAME = "access_token"
-ADMIN_COOKIE_NAME = "admin_token"
+COOKIE_NAME = "access_token"
 COOKIE_MAX_AGE = 604800  # 7 days in seconds
 
 limiter = Limiter(key_func=get_remote_address)
@@ -42,9 +41,9 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET, algorithm=ALGORITHM)
     return encoded_jwt
 
-def set_auth_cookie(response: Response, token: str, cookie_name: str = TENANT_COOKIE_NAME):
+def set_auth_cookie(response: Response, token: str):
     response.set_cookie(
-        key=cookie_name,
+        key=COOKIE_NAME,
         value=token,
         max_age=COOKIE_MAX_AGE,
         httponly=True,
@@ -53,17 +52,17 @@ def set_auth_cookie(response: Response, token: str, cookie_name: str = TENANT_CO
         path="/",
     )
 
-def clear_auth_cookie(response: Response, cookie_name: str = TENANT_COOKIE_NAME):
+def clear_auth_cookie(response: Response):
     response.delete_cookie(
-        key=cookie_name,
+        key=COOKIE_NAME,
         path="/",
         httponly=True,
         secure=settings.COOKIE_SECURE,
         samesite="lax",
     )
 
-async def get_current_tenant(request: Request):
-    token = request.cookies.get(TENANT_COOKIE_NAME)
+async def get_current_user(request: Request):
+    token = request.cookies.get(COOKIE_NAME)
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -73,34 +72,36 @@ async def get_current_tenant(request: Request):
         raise credentials_exception
     try:
         payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[ALGORITHM])
-        tenant_id: str = payload.get("sub")
-        if tenant_id is None:
+        sub: str = payload.get("sub")
+        role: str = payload.get("role")
+        if sub is None or role is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
+    return {"sub": sub, "role": role}
 
-    tenant = await db.tenants.find_one({"tenant_id": tenant_id})
+async def get_current_tenant(request: Request):
+    user = await get_current_user(request)
+    if user["role"] != "tenant":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tenant access required",
+        )
+    tenant = await db.tenants.find_one({"tenant_id": user["sub"]})
     if tenant is None:
-        raise credentials_exception
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Tenant not found",
+        )
     return tenant
 
 async def get_current_admin(request: Request):
-    token = request.cookies.get(ADMIN_COOKIE_NAME)
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate admin credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    if token is None:
-        raise credentials_exception
-    try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[ALGORITHM])
-        role: str = payload.get("role")
-        if role != "admin":
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-
+    user = await get_current_user(request)
+    if user["role"] != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
     return {"username": "admin", "role": "admin"}
 
 async def verify_api_key(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)):

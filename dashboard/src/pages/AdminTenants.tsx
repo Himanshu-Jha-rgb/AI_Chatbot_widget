@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { adminAxios } from '../utils/axios';
 import { Tenant } from '../interfaces';
+import LoadingSpinner from '../components/LoadingSpinner';
 import { Trash2, ShieldAlert } from 'lucide-react';
 
 const AdminTenants = () => {
@@ -36,12 +37,7 @@ const AdminTenants = () => {
   };
 
   if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-purple-600 border-t-transparent" />
-        <span className="ml-3 text-slate-400 font-medium">Loading tenants...</span>
-      </div>
-    );
+    return <LoadingSpinner message="Loading tenants..." />;
   }
 
   if (error) {

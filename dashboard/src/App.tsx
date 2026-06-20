@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom';
 import { StoreProvider } from './store';
 import Layout from './components/Layout';
 import { privateAxios, adminAxios } from './utils/axios';
@@ -19,7 +19,6 @@ import AdminLogin from './pages/AdminLogin';
 import AdminTenants from './pages/AdminTenants';
 
 // System Admin Layout Component
-import { Link, useNavigate } from 'react-router-dom';
 import { Shield, Users, LogOut } from 'lucide-react';
 
 const AuthSpinner = () => (

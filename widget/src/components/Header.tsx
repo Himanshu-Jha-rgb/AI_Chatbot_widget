@@ -1,4 +1,3 @@
-import React from 'react';
 import { Palette } from '../utils/theme';
 
 interface HeaderProps {

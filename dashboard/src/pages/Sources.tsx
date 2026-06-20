@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { privateAxios } from '../utils/axios';
 import { Source } from '../interfaces';
 import { useStore, hasAccess } from '../store';
+import LoadingSpinner from '../components/LoadingSpinner';
+import { useRbacError } from '../hooks/useRbacError';
 import {
   Globe,
   FileText,
@@ -96,7 +98,7 @@ const Sources = () => {
   const [showCreate, setShowCreate] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<Source | null>(null);
-  const [rbacError, setRbacError] = useState<string | null>(null);
+  const { rbacError, triggerRbacError } = useRbacError();
 
   const isEditor = hasAccess(state.role, 'write');
   const isAdmin = hasAccess(state.role, 'delete');
@@ -115,11 +117,6 @@ const Sources = () => {
   useEffect(() => {
     fetchSources();
   }, []);
-
-  const triggerRbacError = (msg: string) => {
-    setRbacError(msg);
-    setTimeout(() => setRbacError(null), 4000);
-  };
 
   const handleDelete = async (source: Source) => {
     if (!isAdmin) {
@@ -203,12 +200,7 @@ const Sources = () => {
   };
 
   if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-violet-500 border-t-transparent" />
-        <span className="ml-3 text-slate-400 font-medium">Loading sources...</span>
-      </div>
-    );
+    return <LoadingSpinner message="Loading sources..." />;
   }
 
   const sourcesByType: Record<string, Source[]> = {};

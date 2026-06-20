@@ -1,8 +1,9 @@
-import React from 'react';
+import { useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Message } from '../types';
 import { Palette } from '../utils/theme';
 import { EnquiryForm } from './EnquiryForm';
+import { SCROLL_INTO_VIEW_DELAY } from '../utils/constants';
 
 interface MessageListProps {
   messages: Message[];
@@ -25,8 +26,21 @@ export function MessageList({
   onFeedback,
   onEnquirySubmit,
 }: MessageListProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // Scroll to bottom after a short delay to allow DOM to update
+    const timer = setTimeout(() => {
+      el.scrollTop = el.scrollHeight;
+    }, SCROLL_INTO_VIEW_DELAY);
+    return () => clearTimeout(timer);
+  }, [messages]);
+
   return (
     <div 
+      ref={scrollRef}
       className="flex-1 p-4 overflow-y-auto flex flex-col gap-2.5"
       style={{ backgroundColor: palette.msgAreaBg }}
     >
@@ -155,10 +169,10 @@ export function MessageList({
               </ReactMarkdown>
               {m.isStreaming && (
                 <span
-                  className="inline-block w-[2px] h-[14px] ml-[2px] align-middle rounded-sm"
+                  className="inline-block w-[7px] h-[7px] ml-[3px] align-middle rounded-full"
                   style={{
                     backgroundColor: accent,
-                    animation: 'cwCursorBlink 0.8s step-end infinite',
+                    animation: 'cwBreathe 1.4s ease-in-out infinite',
                   }}
                 />
               )}

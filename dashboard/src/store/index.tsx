@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import { createContext, useContext, useReducer, ReactNode } from 'react';
 import { Lead, Stats } from '../interfaces';
 
 export type UserRole = 'admin' | 'editor' | 'viewer';
@@ -20,7 +20,7 @@ const initialState: State = {
   stats: null,
   loading: false,
   error: null,
-  role: (localStorage.getItem('userRole') as UserRole) || 'admin',
+  role: 'admin',
 };
 
 type Action =
@@ -52,12 +52,10 @@ function reducer(state: State, action: Action): State {
     case 'SET_ERROR':
       return { ...state, error: action.payload };
     case 'SET_ROLE':
-      localStorage.setItem('userRole', action.payload);
       return { ...state, role: action.payload };
     case 'RESET_STORE':
       return {
         ...initialState,
-        role: state.role // keep role during logout reset
       };
     default:
       return state;

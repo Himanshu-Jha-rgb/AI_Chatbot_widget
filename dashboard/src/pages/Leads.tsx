@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { privateAxios } from '../utils/axios';
 import { Lead } from '../interfaces';
+import LoadingSpinner from '../components/LoadingSpinner';
 import { Users, Mail, Phone, Calendar, MessageSquare } from 'lucide-react';
 
 const Leads = () => {
@@ -34,12 +35,7 @@ const Leads = () => {
   ];
 
   if (loading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-violet-500 border-t-transparent" />
-        <span className="ml-3 text-slate-400 font-medium">Loading leads...</span>
-      </div>
-    );
+    return <LoadingSpinner message="Loading leads..." />;
   }
 
   return (
