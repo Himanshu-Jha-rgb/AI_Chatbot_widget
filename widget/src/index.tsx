@@ -3,18 +3,12 @@ import { Widget } from './Widget';
 import './index.css';
 
 const init = () => {
-    const devRoot = document.getElementById('root');
-    if (devRoot) {
-        const root = createRoot(devRoot);
-        root.render(<Widget apiKey="sk_live_MglQoDyAC0gO2gNornqkZxdzavW4qw14vAlQljcR6JQ" apiBaseUrl="http://localhost:8000" />);
-        return;
-    }
-    
     let scriptTag = document.currentScript as HTMLScriptElement | null;
     if (!scriptTag) {
         const scripts = document.getElementsByTagName('script');
         for (let i = 0; i < scripts.length; i++) {
-            if (scripts[i].src.includes('widget.js')) {
+            const src = scripts[i].src;
+            if (src.includes('widget.js') || src.includes('index.tsx')) {
                 scriptTag = scripts[i] as HTMLScriptElement;
                 break;
             }

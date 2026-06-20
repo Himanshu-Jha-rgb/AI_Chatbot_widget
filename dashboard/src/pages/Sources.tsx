@@ -55,7 +55,7 @@ const DeleteModal = ({ source, onConfirm, onCancel }: DeleteModalProps) => {
         </p>
 
         <div className="space-y-2 mb-6">
-          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <label className="block text-xs font-semibold tracking-wider text-slate-500">
             Type <span className="text-slate-300 font-bold select-all">{matchName}</span> to confirm
           </label>
           <input

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, CSSProperties } from 'react';
 import { chat, submitEnquiry, getWidgetConfig, submitFeedback, apiClient } from './api';
 import { WidgetProps, Message } from './types';
 import { getPalette } from './utils/theme';
@@ -56,7 +56,7 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
   const widgetVars = useMemo(() => ({
     '--widget-accent': accent,
     '--widget-font': font,
-  }), [accent, font]) as React.CSSProperties;
+  }), [accent, font]) as CSSProperties;
 
   const palette = useMemo(() => getPalette(accent, isDark), [accent, isDark]);
 
@@ -186,8 +186,8 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
       className="cw-widget-root"
       style={{
         position: 'fixed',
-        bottom: isMobile ? 0 : '24px',
-        right: isMobile ? 0 : '24px',
+        bottom: isMobile ? (isOpen ? 0 : '16px') : '24px',
+        right: isMobile ? (isOpen ? 0 : '16px') : '24px',
         zIndex: 2147483647,
         fontFamily: font,
         ...widgetVars,
@@ -211,7 +211,7 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
               }}
             />
           )}
-          <div 
+          <div
             className="flex flex-col overflow-hidden z-[2147483647]"
             style={{
               width: isMobile ? '100vw' : WIDGET_WIDTH,
@@ -238,17 +238,17 @@ export const Widget = ({ apiKey, apiBaseUrl }: WidgetProps) => {
 
             {/* Mobile drag handle */}
             {isMobile && (
-              <div 
+              <div
                 className="flex justify-center pt-3 pb-1"
                 style={{ background: palette.headerBg }}
               >
-                <div 
+                <div
                   className="rounded"
                   style={{
                     width: DRAG_HANDLE_WIDTH,
                     height: DRAG_HANDLE_HEIGHT,
                     background: 'rgba(255,255,255,0.4)',
-                  }} 
+                  }}
                 />
               </div>
             )}
