@@ -1,6 +1,14 @@
 import axios from 'axios';
 
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const isLocalhost = Boolean(
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1' ||
+  window.location.hostname === '[::1]'
+);
+
+export const API_BASE_URL = isLocalhost
+  ? ''
+  : (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
 // Public instance for calls that don't need auth (like Login)
 // withCredentials needed so browser stores Set-Cookie from login/register responses

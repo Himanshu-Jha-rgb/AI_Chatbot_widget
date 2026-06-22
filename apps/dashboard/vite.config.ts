@@ -6,6 +6,12 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   base: '/dashboard/',
   server: {
-    port: 3000
+    port: 3000,
+    proxy: {
+      '^/(tenants|admin|chat|dashboard/(sources|crawl|knowledge|docs|leads))': {
+        target: 'http://localhost:8000',
+        changeOrigin: true
+      }
+    }
   }
 })
