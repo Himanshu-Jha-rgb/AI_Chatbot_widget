@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { adminAxios } from '../utils/axios';
 import { formatDate } from '../utils/date';
 import { Tenant } from '../interfaces';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { LoadingSpinner } from '@chatbot/shared';
 import { Trash2, ShieldAlert } from 'lucide-react';
 
 const AdminTenants = () => {

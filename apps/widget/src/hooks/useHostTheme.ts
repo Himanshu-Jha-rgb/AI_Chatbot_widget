@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ThemeState } from '../types';
+import { ThemeState } from '@chatbot/shared';
 import { ACCENT_FALLBACK, isColorDark } from '../utils/theme';
 import { DEFAULT_FONT_FAMILY } from '../utils/constants';
 

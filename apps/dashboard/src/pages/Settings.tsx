@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { privateAxios } from '../utils/axios';
 import { useStore, hasAccess } from '../store';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { LoadingSpinner } from '@chatbot/shared';
 import { useRbacError } from '../hooks/useRbacError';
 import { Copy, Check, RotateCw, Globe, Key, HelpCircle, Code, Plus, Trash2, Lock, FileText } from 'lucide-react';
 

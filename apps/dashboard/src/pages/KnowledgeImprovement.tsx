@@ -3,7 +3,7 @@ import { privateAxios } from '../utils/axios';
 import { formatDate } from '../utils/date';
 import { useStore, hasAccess } from '../store';
 import { KnowledgeGap, Source } from '../interfaces';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { LoadingSpinner } from '@chatbot/shared';
 import { useRbacError } from '../hooks/useRbacError';
 import { 
   Sparkles, 

@@ -4,7 +4,7 @@ import { privateAxios } from '../utils/axios';
 import { formatDate } from '../utils/date';
 import { Source } from '../interfaces';
 import { useStore, hasAccess } from '../store';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { LoadingSpinner } from '@chatbot/shared';
 import { useRbacError } from '../hooks/useRbacError';
 import {
   Globe,

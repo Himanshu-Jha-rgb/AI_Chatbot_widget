@@ -2,34 +2,34 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { privateAxios } from '../utils/axios';
 import { formatDate } from '../utils/date';
-import { TextDoc, Source } from '../interfaces';
+import { FAQ, Source } from '../interfaces';
 import { useStore, hasAccess } from '../store';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { LoadingSpinner } from '@chatbot/shared';
 import { useRbacError } from '../hooks/useRbacError';
 import { 
   ArrowLeft, 
-  Plus, 
-  RefreshCw, 
-  Edit3, 
+  HelpCircle, 
   Trash2, 
-  Save, 
+  Edit3, 
+  Plus, 
+  RefreshCw,
+  Save,
   X,
-  BookOpen,
   Lock
 } from 'lucide-react';
 
-const TextDocs = () => {
+const FAQs = () => {
   const { sourceId } = useParams();
   const navigate = useNavigate();
   const { state } = useStore();
   const [source, setSource] = useState<Source | null>(null);
-  const [docs, setDocs] = useState<TextDoc[]>([]);
+  const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newTitle, setNewTitle] = useState('');
-  const [newBody, setNewBody] = useState('');
+  const [newQuestion, setNewQuestion] = useState('');
+  const [newAnswer, setNewAnswer] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState('');
-  const [editBody, setEditBody] = useState('');
+  const [editQuestion, setEditQuestion] = useState('');
+  const [editAnswer, setEditAnswer] = useState('');
   const [indexing, setIndexing] = useState(false);
   const { rbacError, triggerRbacError } = useRbacError();
 
@@ -38,17 +38,17 @@ const TextDocs = () => {
 
   const fetchData = React.useCallback(async () => {
     try {
-      const [sourceRes, docsRes] = await Promise.all([
+      const [sourceRes, faqsRes] = await Promise.all([
         privateAxios.get(`/dashboard/sources/${sourceId}`),
-        privateAxios.get(`/dashboard/sources/${sourceId}/docs`),
+        privateAxios.get(`/dashboard/sources/${sourceId}/faqs`),
       ]);
 
-      if (sourceRes.data.source_type !== 'text') {
+      if (sourceRes.data.source_type !== 'faq') {
         navigate('/sources');
         return;
       }
       setSource(sourceRes.data);
-      setDocs(docsRes.data);
+      setFaqs(faqsRes.data);
     } catch (err) {
       console.error(err);
       navigate('/sources');
@@ -61,35 +61,35 @@ const TextDocs = () => {
     fetchData();
   }, [fetchData]);
 
-  const addDoc = async () => {
+  const addFaq = async () => {
     if (!isEditor) {
-      triggerRbacError("You do not have Editor permissions to add documents.");
+      triggerRbacError("You do not have Editor permissions to add FAQ entries.");
       return;
     }
-    if (!newTitle.trim() || !newBody.trim()) return;
+    if (!newQuestion.trim() || !newAnswer.trim()) return;
     try {
-      await privateAxios.post(`/dashboard/sources/${sourceId}/docs`, {
-        title: newTitle.trim(),
-        body: newBody.trim(),
+      await privateAxios.post(`/dashboard/sources/${sourceId}/faqs`, {
+        question: newQuestion.trim(),
+        answer: newAnswer.trim(),
       });
-      setNewTitle('');
-      setNewBody('');
+      setNewQuestion('');
+      setNewAnswer('');
       fetchData();
     } catch (err) {
       console.error(err);
     }
   };
 
-  const updateDoc = async (docId: string) => {
+  const updateFaq = async (faqId: string) => {
     if (!isEditor) {
-      triggerRbacError("You do not have Editor permissions to edit documents.");
+      triggerRbacError("You do not have Editor permissions to update FAQ entries.");
       return;
     }
-    if (!editTitle.trim() || !editBody.trim()) return;
+    if (!editQuestion.trim() || !editAnswer.trim()) return;
     try {
-      await privateAxios.put(`/dashboard/sources/${sourceId}/docs/${docId}`, {
-        title: editTitle.trim(),
-        body: editBody.trim(),
+      await privateAxios.put(`/dashboard/sources/${sourceId}/faqs/${faqId}`, {
+        question: editQuestion.trim(),
+        answer: editAnswer.trim(),
       });
       setEditingId(null);
       fetchData();
@@ -98,28 +98,28 @@ const TextDocs = () => {
     }
   };
 
-  const deleteDoc = async (docId: string) => {
+  const deleteFaq = async (faqId: string) => {
     if (!isAdmin) {
-      triggerRbacError("You do not have Administrator permissions to delete documents.");
+      triggerRbacError("You do not have Administrator permissions to delete FAQ entries.");
       return;
     }
-    if (!window.confirm('Delete this document? This will also remove its indexed chunks.')) return;
+    if (!window.confirm('Delete this FAQ?')) return;
     try {
-      await privateAxios.delete(`/dashboard/sources/${sourceId}/docs/${docId}`);
+      await privateAxios.delete(`/dashboard/sources/${sourceId}/faqs/${faqId}`);
       fetchData();
     } catch (err) {
       console.error(err);
     }
   };
 
-  const indexDocs = async () => {
+  const indexFaqs = async () => {
     if (!isEditor) {
-      triggerRbacError("You do not have Editor permissions to index documents.");
+      triggerRbacError("You do not have Editor permissions to sync or index FAQ documents.");
       return;
     }
     setIndexing(true);
     try {
-      await privateAxios.post(`/dashboard/sources/${sourceId}/docs/index`);
+      await privateAxios.post(`/dashboard/sources/${sourceId}/faqs/index`);
       const poll = setInterval(async () => {
         try {
           const sr = await privateAxios.get(`/dashboard/sources/${sourceId}`);
@@ -140,7 +140,7 @@ const TextDocs = () => {
   };
 
   if (loading) {
-    return <LoadingSpinner message="Loading Documents..." />;
+    return <LoadingSpinner message="Loading FAQs..." />;
   }
 
   return (
@@ -156,7 +156,7 @@ const TextDocs = () => {
           </button>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-2xl font-bold text-white tracking-tight">{source?.name || 'Text Documents'}</h2>
+              <h2 className="text-2xl font-bold text-white tracking-tight">{source?.name || 'FAQs'}</h2>
               {source && (
                 <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xxs font-bold uppercase ${
                   source.status === 'ready' 
@@ -171,7 +171,7 @@ const TextDocs = () => {
             </div>
             {source && (
               <p className="text-xs text-slate-400 mt-1">
-                {docs.length} document{docs.length !== 1 ? 's' : ''} · {source.chunk_count || 0} chunks indexed
+                {faqs.length} FAQ Q&As · {source.chunk_count || 0} chunks indexed
                 {source.last_indexed_at && ` · Last indexed: ${formatDate(source.last_indexed_at)}`}
               </p>
             )}
@@ -180,12 +180,12 @@ const TextDocs = () => {
 
         {/* Index Action */}
         <button
-          onClick={indexDocs}
-          disabled={indexing || docs.length === 0}
+          onClick={indexFaqs}
+          disabled={indexing || faqs.length === 0}
           className="flex items-center justify-center gap-2 px-5 py-2.5 bg-violet-600 text-sm font-semibold text-white rounded-xl shadow-md shadow-violet-900/30 hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
           <RefreshCw size={16} className={indexing ? 'animate-spin' : ''} />
-          <span>{indexing ? 'Indexing Documents...' : 'Sync & Index Documents'}</span>
+          <span>{indexing ? 'Indexing FAQs...' : 'Sync & Index FAQs'}</span>
         </button>
       </div>
 
@@ -198,85 +198,85 @@ const TextDocs = () => {
       )}
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Form to add new text doc */}
+        {/* Add FAQ form */}
         <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800/80 shadow-lg h-fit space-y-5">
           <h3 className="text-md font-bold text-white flex items-center gap-2">
             <Plus size={18} className="text-violet-400" />
-            <span>Create Document</span>
+            <span>Add Q&A Entry</span>
           </h3>
 
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
-                Document Title
+                Question
               </label>
               <input
-                placeholder="e.g. Fees & Refunds Policy"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder="What are the class timings?"
+                value={newQuestion}
+                onChange={(e) => setNewQuestion(e.target.value)}
                 className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:border-violet-600 focus:outline-none transition-all"
               />
             </div>
 
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
-                Document Content
+                Answer
               </label>
               <textarea
-                placeholder="Add policies or guidelines here. Markdown headings (e.g. ## Tuition Fees) are supported to index chunks correctly."
-                value={newBody}
-                onChange={(e) => setNewBody(e.target.value)}
-                rows={8}
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:border-violet-600 focus:outline-none transition-all font-mono text-xs"
+                placeholder="Classes run from 9:00 AM to 3:00 PM."
+                value={newAnswer}
+                onChange={(e) => setNewAnswer(e.target.value)}
+                rows={4}
+                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:border-violet-600 focus:outline-none transition-all"
               />
             </div>
           </div>
 
           <button
-            onClick={addDoc}
-            disabled={!newTitle.trim() || !newBody.trim()}
+            onClick={addFaq}
+            disabled={!newQuestion.trim() || !newAnswer.trim()}
             className="w-full rounded-xl bg-violet-600 py-3 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
-            Save Document
+            Add FAQ Entry
           </button>
         </div>
 
-        {/* Documents list */}
+        {/* FAQs List */}
         <div className="lg:col-span-2 space-y-4">
-          {docs.length === 0 && (
+          {faqs.length === 0 && (
             <div className="bg-slate-900 py-16 rounded-3xl border border-slate-800/80 shadow-lg text-center">
-              <BookOpen size={40} className="text-slate-700 mx-auto mb-4 animate-pulse" />
-              <h4 className="text-sm font-bold text-white">No documents yet</h4>
-              <p className="text-xs text-slate-400 mt-1">Use the creation form to add structured knowledge articles.</p>
+              <HelpCircle size={40} className="text-slate-700 mx-auto mb-4 animate-pulse" />
+              <h4 className="text-sm font-bold text-white">No FAQ entries yet</h4>
+              <p className="text-xs text-slate-400 mt-1">Use the entry form to add questions and answers.</p>
             </div>
           )}
 
-          {docs.map((doc) => (
+          {faqs.map((faq) => (
             <div 
-              key={doc.doc_id} 
-              className="bg-slate-900 p-6 rounded-3xl border border-slate-800/80 shadow-sm transition-all hover:shadow-md"
+              key={faq.faq_id} 
+              className="bg-slate-900 p-5 rounded-3xl border border-slate-800/80 shadow-sm transition-all hover:shadow-md"
             >
-              {editingId === doc.doc_id ? (
+              {editingId === faq.faq_id ? (
                 <div className="space-y-4">
                   <div className="space-y-3">
                     <input
-                      value={editTitle}
-                      onChange={(e) => setEditTitle(e.target.value)}
-                      placeholder="Title"
+                      value={editQuestion}
+                      onChange={(e) => setEditQuestion(e.target.value)}
+                      placeholder="Question"
                       className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2 text-sm text-slate-200 focus:border-violet-600 focus:outline-none transition-all"
                     />
                     <textarea
-                      value={editBody}
-                      onChange={(e) => setEditBody(e.target.value)}
-                      rows={6}
-                      placeholder="Document Content"
-                      className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2 text-sm text-slate-200 focus:border-violet-600 focus:outline-none transition-all font-mono text-xs"
+                      value={editAnswer}
+                      onChange={(e) => setEditAnswer(e.target.value)}
+                      rows={3}
+                      placeholder="Answer"
+                      className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-2 text-sm text-slate-200 focus:border-violet-600 focus:outline-none transition-all"
                     />
                   </div>
                   <div className="flex gap-2">
                     <button 
-                      onClick={() => updateDoc(doc.doc_id)} 
-                      disabled={!editTitle.trim() || !editBody.trim()}
+                      onClick={() => updateFaq(faq.faq_id)} 
+                      disabled={!editQuestion.trim() || !editAnswer.trim()}
                       className="flex items-center gap-1.5 px-4 py-2 bg-violet-600 text-xs font-semibold text-white rounded-xl hover:bg-violet-700 transition-colors cursor-pointer"
                     >
                       <Save size={14} />
@@ -293,23 +293,21 @@ const TextDocs = () => {
                 </div>
               ) : (
                 <div className="flex justify-between items-start gap-4">
-                  <div className="space-y-2 min-w-0 flex-1">
-                    <h4 className="text-sm font-bold text-white truncate">{doc.title}</h4>
-                    <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-wrap">
-                      {doc.body.length > 300 ? `${doc.body.substring(0, 300)}...` : doc.body}
-                    </p>
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-bold text-white">Q: {faq.question}</h4>
+                    <p className="text-xs text-slate-400 leading-relaxed">A: {faq.answer}</p>
                   </div>
 
                   <div className="flex gap-1.5 flex-shrink-0">
                     {isEditor ? (
                       <button
                         onClick={() => {
-                          setEditingId(doc.doc_id);
-                          setEditTitle(doc.title);
-                          setEditBody(doc.body);
+                          setEditingId(faq.faq_id);
+                          setEditQuestion(faq.question);
+                          setEditAnswer(faq.answer);
                         }}
                         className="p-2 text-slate-500 hover:text-violet-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                        title="Edit Document"
+                        title="Edit FAQ"
                       >
                         <Edit3 size={15} />
                       </button>
@@ -321,9 +319,9 @@ const TextDocs = () => {
 
                     {isAdmin ? (
                       <button
-                        onClick={() => deleteDoc(doc.doc_id)}
+                        onClick={() => deleteFaq(faq.faq_id)}
                         className="p-2 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                        title="Delete Document"
+                        title="Delete FAQ"
                       >
                         <Trash2 size={15} />
                       </button>
@@ -343,4 +341,4 @@ const TextDocs = () => {
   );
 };
 
-export default TextDocs;
+export default FAQs;

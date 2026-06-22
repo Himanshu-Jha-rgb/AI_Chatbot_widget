@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Message } from '../types';
+import { Message } from '@chatbot/shared';
 import { Palette } from '../utils/theme';
 import { EnquiryForm } from './EnquiryForm';
 import { SCROLL_INTO_VIEW_DELAY } from '../utils/constants';

@@ -13,6 +13,10 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@chatbot/shared": ["../../packages/shared/src/index.ts"]
+    },
 
     /* Linting */
     "strict": true,

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { privateAxios } from '../utils/axios';
 import { formatDate } from '../utils/date';
 import { Lead } from '../interfaces';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { LoadingSpinner } from '@chatbot/shared';
 import { Users, Mail, Phone, Calendar, MessageSquare } from 'lucide-react';
 
 const Leads = () => {

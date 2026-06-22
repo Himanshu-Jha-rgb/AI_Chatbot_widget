@@ -20,7 +20,7 @@ Everything runs from one service on Render: FastAPI backend + dashboard + widget
    - **Environment**: `Python 3`
    - **Build Command**:
      ```bash
-     cd ../widget && npm install && npm run build && cd ../dashboard && npm install && npm run build && cd ../backend && uv sync --frozen && uv cache prune --ci
+     cd .. && npm install && npm run build && cd backend && uv sync --frozen && uv cache prune --ci
      ```
    - **Start Command**:
      ```

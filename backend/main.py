@@ -54,13 +54,20 @@ app.include_router(leads.router)
 app.include_router(admin.router)
 app.include_router(knowledge_improvement.router)
 
+# Base paths calculated relative to this file
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.abspath(os.path.join(backend_dir, ".."))
+
+widget_dist = os.path.join(root_dir, "apps/widget/dist")
+dashboard_dist = os.path.join(root_dir, "apps/dashboard/dist")
+uploads_dir = os.path.join(backend_dir, "uploads")
+
 # Mount widget dist directory
-os.makedirs("../widget/dist", exist_ok=True)
-os.makedirs("uploads", exist_ok=True)
-app.mount("/static", StaticFiles(directory="../widget/dist"), name="static")
+os.makedirs(widget_dist, exist_ok=True)
+os.makedirs(uploads_dir, exist_ok=True)
+app.mount("/static", StaticFiles(directory=widget_dist), name="static")
 
 # Mount dashboard built assets (JS, CSS, etc.)
-dashboard_dist = os.path.abspath("../dashboard/dist")
 os.makedirs(dashboard_dist, exist_ok=True)
 dashboard_assets = os.path.join(dashboard_dist, "assets")
 if os.path.isdir(dashboard_assets):

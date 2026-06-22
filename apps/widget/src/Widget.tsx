@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo, CSSProperties } from 'react';
 import { submitEnquiry, getWidgetConfig, submitFeedback, apiClient } from './api';
-import { WidgetProps, Message } from './types';
+import { WidgetProps, Message } from '@chatbot/shared';
 import { getPalette } from './utils/theme';
 import { useHostTheme } from './hooks/useHostTheme';
 import { useIsMobile } from './hooks/useIsMobile';
