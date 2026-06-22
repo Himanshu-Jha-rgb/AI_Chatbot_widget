@@ -76,6 +76,12 @@ async def root():
     return RedirectResponse(url="/dashboard/")
 
 @app.on_event("startup")
+async def apply_db_schemas():
+    """Apply MongoDB JSON Schema validators to all collections."""
+    from core.schema_validator import ensure_schemas
+    await ensure_schemas()
+
+@app.on_event("startup")
 async def cleanup_stale_jobs():
     """Mark any 'running' crawl jobs as failed — they died when Render killed the process."""
     from datetime import datetime, timezone
