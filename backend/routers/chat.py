@@ -266,7 +266,8 @@ If the user asks about this website, what it does, or what it offers, use the de
 The user is currently on page: {req.current_url} titled {req.current_page_title}.
 Context: {context_text}
 CRITICAL: You MUST ONLY reply in English, Hindi, or Hinglish (a mix of Hindi and English). If the user writes in English, reply in English. If the user writes in Hindi (Devanagari script), reply in Hindi. If the user writes in Hinglish (Hindi written in English script), reply in Hinglish. NEVER use any other language. Ignore the language of the context above — always respond in the user's language from the allowed set.
-If the user asks about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM]."""
+If the user asks about pricing, demo, purchasing, or wants to be contacted, offer to help and at the end of your response append [ENQUIRY_FORM].
+IMPORTANT: If the context contains a specific URL for registration, signup, login, purchase, or any action the user is asking about, include that URL inline in your response (as a clickable link or clearly written out). Do not just mention the website name — provide the exact full URL from the context."""
 
     if summary:
         system_prompt += f"\n\nHere is a summary of the conversation so far:\n{summary}"
