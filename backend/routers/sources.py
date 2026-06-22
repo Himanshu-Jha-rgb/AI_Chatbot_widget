@@ -29,6 +29,32 @@ async def _delete_source_data(tenant_id: str, source_id: str) -> None:
     await db.pages.delete_many({"tenant_id": tenant_id, "source_id": source_id})
 
 
+async def _create_source_job(tenant_id: str, source_id: str, job_type: str, config: dict = None) -> str:
+    """Create a source job entry for audit history."""
+    job_id = str(uuid.uuid4())
+    job_doc = {
+        "tenant_id": tenant_id,
+        "job_id": job_id,
+        "source_id": source_id,
+        "job_type": job_type,
+        "status": "queued",
+        "chunks_created": 0,
+        "embedding_errors": 0,
+        "started_at": None,
+        "finished_at": None,
+        "error": None,
+        "config": config or {},
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.source_jobs.insert_one(job_doc)
+    return job_id
+
+
+async def _update_source_job(job_id: str, update: dict) -> None:
+    """Update a source job entry."""
+    await db.source_jobs.update_one({"job_id": job_id}, {"$set": update})
+
+
 @router.get("")
 async def list_sources(current_tenant: dict = Depends(get_current_tenant)):
     """List all knowledge sources for the tenant, including website crawls."""
@@ -180,6 +206,9 @@ async def delete_crawl_source(
 
 async def _index_pdf_background(tenant_id: str, source_id: str, file_path: str, name: str):
     """Background task: extract text from PDF and index it."""
+    job_id = await _create_source_job(tenant_id, source_id, "pdf_index", {"file_path": file_path, "name": name})
+    await _update_source_job(job_id, {"status": "running", "started_at": datetime.now(timezone.utc)})
+    
     try:
         text = extract_text_from_pdf(file_path)
         if not text.strip():
@@ -203,6 +232,11 @@ async def _index_pdf_background(tenant_id: str, source_id: str, file_path: str, 
                 "updated_at": datetime.now(timezone.utc),
             }}
         )
+        await _update_source_job(job_id, {
+            "status": "done",
+            "chunks_created": result.get("chunks_created", 0),
+            "finished_at": datetime.now(timezone.utc),
+        })
     except Exception as e:
         print(f"PDF indexing failed for {source_id}: {e}")
         await db.sources.update_one(
@@ -212,6 +246,69 @@ async def _index_pdf_background(tenant_id: str, source_id: str, file_path: str, 
                 "updated_at": datetime.now(timezone.utc),
             }}
         )
+        await _update_source_job(job_id, {
+            "status": "failed",
+            "error": str(e),
+            "finished_at": datetime.now(timezone.utc),
+        })
+
+
+def _serialize_job(job):
+    """Convert datetime fields to ISO strings for frontend consumption."""
+    if not job:
+        return job
+    for field in ("started_at", "finished_at", "created_at"):
+        val = job.get(field)
+        if val is not None:
+            job[field] = val.isoformat() if hasattr(val, "isoformat") else str(val)
+    return job
+
+
+@router.get("/history")
+async def source_job_history(
+    page: int = 1,
+    page_size: int = 20,
+    current_tenant: dict = Depends(get_current_tenant),
+):
+    """Get audit history of all source indexing jobs for the tenant with pagination."""
+    tenant_id = current_tenant["tenant_id"]
+    skip = (page - 1) * page_size
+    jobs = await db.source_jobs.find(
+        {"tenant_id": tenant_id},
+        {"_id": 0}
+    ).sort("started_at", -1).skip(skip).limit(page_size).to_list(length=page_size)
+    total = await db.source_jobs.count_documents({"tenant_id": tenant_id})
+    return {
+        "items": [_serialize_job(j) for j in jobs],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size,
+    }
+
+
+@router.get("/history/{source_id}")
+async def source_job_history_by_source(
+    source_id: str,
+    page: int = 1,
+    page_size: int = 20,
+    current_tenant: dict = Depends(get_current_tenant),
+):
+    """Get audit history for a specific source with pagination."""
+    tenant_id = current_tenant["tenant_id"]
+    skip = (page - 1) * page_size
+    jobs = await db.source_jobs.find(
+        {"tenant_id": tenant_id, "source_id": source_id},
+        {"_id": 0}
+    ).sort("started_at", -1).skip(skip).limit(page_size).to_list(length=page_size)
+    total = await db.source_jobs.count_documents({"tenant_id": tenant_id, "source_id": source_id})
+    return {
+        "items": [_serialize_job(j) for j in jobs],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size,
+    }
 
 
 @router.post("/pdf/upload", status_code=201)

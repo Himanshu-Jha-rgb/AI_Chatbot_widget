@@ -76,3 +76,27 @@ export interface Stats {
     count: number;
   }[];
 }
+
+export type JobType = 'crawl' | 'pdf_index' | 'faq_index' | 'text_index';
+
+export interface SourceJob {
+  job_id: string;
+  source_id: string;
+  job_type: JobType;
+  status: 'queued' | 'running' | 'done' | 'failed';
+  chunks_created: number;
+  embedding_errors: number;
+  started_at?: string;
+  finished_at?: string;
+  error?: string;
+  config?: Record<string, any>;
+  created_at: string;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}

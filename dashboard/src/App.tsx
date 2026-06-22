@@ -12,6 +12,7 @@ import PDFUpload from './pages/PDFUpload';
 import FAQs from './pages/FAQs';
 import TextDocs from './pages/TextDocs';
 import Crawl from './pages/Crawl';
+import History from './pages/History';
 import KnowledgeImprovement from './pages/KnowledgeImprovement';
 import Leads from './pages/Leads';
 import Settings from './pages/Settings';
@@ -165,6 +166,7 @@ const App = () => {
           <Route path="/sources/faqs/:sourceId" element={<PrivateRoute><FAQs /></PrivateRoute>} />
           <Route path="/sources/docs/:sourceId" element={<PrivateRoute><TextDocs /></PrivateRoute>} />
           <Route path="/crawl" element={<PrivateRoute><Crawl /></PrivateRoute>} />
+          <Route path="/history" element={<PrivateRoute><History /></PrivateRoute>} />
           <Route path="/knowledge" element={<PrivateRoute><KnowledgeImprovement /></PrivateRoute>} />
           <Route path="/leads" element={<PrivateRoute><Leads /></PrivateRoute>} />
           <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />

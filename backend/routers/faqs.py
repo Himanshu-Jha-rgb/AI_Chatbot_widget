@@ -139,11 +139,40 @@ async def delete_faq(
 
 # --- Indexing ---
 
+async def _create_source_job(tenant_id: str, source_id: str, job_type: str, config: dict = None) -> str:
+    """Create a source job entry for audit history."""
+    job_id = str(uuid.uuid4())
+    job_doc = {
+        "tenant_id": tenant_id,
+        "job_id": job_id,
+        "source_id": source_id,
+        "job_type": job_type,
+        "status": "queued",
+        "chunks_created": 0,
+        "embedding_errors": 0,
+        "started_at": None,
+        "finished_at": None,
+        "error": None,
+        "config": config or {},
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.source_jobs.insert_one(job_doc)
+    return job_id
+
+
+async def _update_source_job(job_id: str, update: dict) -> None:
+    """Update a source job entry."""
+    await db.source_jobs.update_one({"job_id": job_id}, {"$set": update})
+
+
 async def _index_all_faqs(tenant_id: str, source_id: str):
     """Background task: index all FAQs as chunks."""
     from services.ingestion import ingest_document
     from services.suggested import generate_suggested_questions
 
+    job_id = await _create_source_job(tenant_id, source_id, "faq_index")
+    await _update_source_job(job_id, {"status": "running", "started_at": datetime.now(timezone.utc)})
+    
     try:
         # Delete existing chunks for this source
         await db.chunks.delete_many({"tenant_id": tenant_id, "source_id": source_id})
@@ -176,6 +205,11 @@ async def _index_all_faqs(tenant_id: str, source_id: str):
                 "updated_at": datetime.now(timezone.utc),
             }}
         )
+        await _update_source_job(job_id, {
+            "status": "done",
+            "chunks_created": total_chunks,
+            "finished_at": datetime.now(timezone.utc),
+        })
 
         # Auto-generate suggested questions after indexing
         import asyncio
@@ -189,6 +223,11 @@ async def _index_all_faqs(tenant_id: str, source_id: str):
                 "updated_at": datetime.now(timezone.utc),
             }}
         )
+        await _update_source_job(job_id, {
+            "status": "failed",
+            "error": str(e),
+            "finished_at": datetime.now(timezone.utc),
+        })
 
 
 @router.post("/index")

@@ -30,6 +30,13 @@ async def crawl_task(tenant_id: str, seed_url: str, job_id: str, source_id: str 
             "error": None,
         }}
     )
+    await db.source_jobs.update_one(
+        {"job_id": job_id},
+        {"$set": {
+            "status": "running",
+            "started_at": datetime.now(timezone.utc),
+        }}
+    )
 
     try:
         if not settings.FIRECRAWL_API_KEY:
@@ -76,9 +83,25 @@ async def crawl_task(tenant_id: str, seed_url: str, job_id: str, source_id: str 
                     "embedding_errors": embedding_errors,
                 }}
             )
+            await db.source_jobs.update_one(
+                {"job_id": job_id},
+                {"$set": {
+                    "chunks_created": chunks_created,
+                    "embedding_errors": embedding_errors,
+                }}
+            )
 
         print(f"[CRAWL {job_id}] Done. pages_found={pages_found}, chunks_created={chunks_created}, embedding_errors={embedding_errors}")
         await db.crawl_jobs.update_one(
+            {"job_id": job_id},
+            {"$set": {
+                "status": "done",
+                "pages_found": pages_found,
+                "chunks_created": chunks_created,
+                "finished_at": datetime.now(timezone.utc)
+            }}
+        )
+        await db.source_jobs.update_one(
             {"job_id": job_id},
             {"$set": {
                 "status": "done",
@@ -98,6 +121,14 @@ async def crawl_task(tenant_id: str, seed_url: str, job_id: str, source_id: str 
         import traceback
         traceback.print_exc()
         await db.crawl_jobs.update_one(
+            {"job_id": job_id},
+            {"$set": {
+                "status": "failed",
+                "error": str(e),
+                "finished_at": datetime.now(timezone.utc)
+            }}
+        )
+        await db.source_jobs.update_one(
             {"job_id": job_id},
             {"$set": {
                 "status": "failed",

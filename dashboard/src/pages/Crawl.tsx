@@ -3,7 +3,7 @@ import { privateAxios } from '../utils/axios';
 import { formatDate } from '../utils/date';
 import { useStore, hasAccess } from '../store';
 import { useRbacError } from '../hooks/useRbacError';
-import { RefreshCw, AlertCircle, History, Play, Lock } from 'lucide-react';
+import { RefreshCw, AlertCircle, History, Play, Lock, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const Crawl = () => {
   const { state } = useStore();
@@ -13,22 +13,29 @@ const Crawl = () => {
   const [history, setHistory] = useState<any[]>([]);
   const [isStarting, setIsStarting] = useState(false);
   const [crawlError, setCrawlError] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   const { rbacError, triggerRbacError } = useRbacError();
+  const pageSize = 20;
 
   const isEditor = hasAccess(state.role, 'write');
 
-  const fetchHistory = async () => {
+  const fetchHistory = async (p: number) => {
     try {
-      const res = await privateAxios.get('/dashboard/crawl/history');
-      setHistory(Array.isArray(res.data) ? res.data : []);
+      const res = await privateAxios.get(`/dashboard/crawl/history?page=${p}&page_size=${pageSize}`);
+      const data = res.data;
+      setHistory(Array.isArray(data.items) ? data.items : []);
+      setTotal(data.total || 0);
+      setTotalPages(data.total_pages || 1);
     } catch (err) {
       console.error('Failed to fetch crawl history:', err);
     }
   };
 
   useEffect(() => {
-    fetchHistory();
-  }, []);
+    fetchHistory(page);
+  }, [page]);
 
   const handleCrawl = async () => {
     if (!isEditor) {
@@ -43,7 +50,8 @@ const Crawl = () => {
       setJobId(res.data.job_id);
       setJobStatus(null);
       setSeedUrl('');
-      fetchHistory();
+      setPage(1);
+      fetchHistory(1);
     } catch (err: any) {
       setCrawlError(err.response?.data?.detail || 'Failed to start crawl job');
     } finally {
@@ -60,7 +68,8 @@ const Crawl = () => {
           setJobStatus(res.data);
           if (res.data.status === 'done' || res.data.status === 'failed') {
             clearInterval(interval);
-            fetchHistory();
+            setPage(1);
+            fetchHistory(1);
           }
         } catch {
           clearInterval(interval);
@@ -241,6 +250,30 @@ const Crawl = () => {
                 ))}
               </tbody>
             </table>
+
+            {totalPages > 1 && (
+              <div className="px-6 py-4 border-t border-slate-800 flex items-center justify-between">
+                <span className="text-xs text-slate-500">
+                  Page {page} of {totalPages} ({total} total)
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-800 text-xs font-semibold text-slate-400 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <ChevronLeft size={14} /> Prev
+                  </button>
+                  <button
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-800 text-xs font-semibold text-slate-400 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    Next <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

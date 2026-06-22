@@ -8,7 +8,8 @@ import {
   Settings, 
   LogOut,
   X,
-  Bot
+  Bot,
+  Clock
 } from 'lucide-react';
 import { publicAxios } from '../utils/axios';
 import { useStore } from '../store';
@@ -33,6 +34,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     { label: 'Overview', icon: LayoutDashboard, path: '/' },
     { label: 'Sources', icon: Database, path: '/sources' },
     { label: 'Crawl Jobs', icon: RefreshCw, path: '/crawl' },
+    { label: 'Index History', icon: Clock, path: '/history' },
     { 
       label: 'Knowledge Gaps', 
       icon: AlertCircle, 
