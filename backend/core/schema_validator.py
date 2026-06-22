@@ -1,4 +1,4 @@
-from pymongo.errors import OperationFailure
+from pymongo.errors import OperationFailure, CollectionInvalid
 from core.auth import db
 
 COLLECTION_SCHEMAS = {
@@ -24,7 +24,7 @@ COLLECTION_SCHEMAS = {
                 },
             }
         },
-        "validationLevel": "strict",
+        "validationLevel": "moderate",
         "validationAction": "error",
     },
     "sources": {
@@ -45,7 +45,7 @@ COLLECTION_SCHEMAS = {
                 },
             }
         },
-        "validationLevel": "strict",
+        "validationLevel": "moderate",
         "validationAction": "error",
     },
     "crawl_jobs": {
@@ -67,7 +67,7 @@ COLLECTION_SCHEMAS = {
                 },
             }
         },
-        "validationLevel": "strict",
+        "validationLevel": "moderate",
         "validationAction": "error",
     },
     "source_jobs": {
@@ -92,7 +92,7 @@ COLLECTION_SCHEMAS = {
                 },
             }
         },
-        "validationLevel": "strict",
+        "validationLevel": "moderate",
         "validationAction": "error",
     },
     "faqs": {
@@ -111,7 +111,7 @@ COLLECTION_SCHEMAS = {
                 },
             }
         },
-        "validationLevel": "strict",
+        "validationLevel": "moderate",
         "validationAction": "error",
     },
     "documents": {
@@ -130,7 +130,7 @@ COLLECTION_SCHEMAS = {
                 },
             }
         },
-        "validationLevel": "strict",
+        "validationLevel": "moderate",
         "validationAction": "error",
     },
     "chunks": {
@@ -159,10 +159,10 @@ COLLECTION_SCHEMAS = {
                 },
             }
         },
-        "validationLevel": "strict",
+        "validationLevel": "moderate",
         "validationAction": "error",
     },
-    "parents": {
+    "tenants": {
         "validator": {
             "$jsonSchema": {
                 "bsonType": "object",
@@ -185,7 +185,7 @@ COLLECTION_SCHEMAS = {
                 },
             }
         },
-        "validationLevel": "strict",
+        "validationLevel": "moderate",
         "validationAction": "error",
     },
     "pages": {
@@ -205,7 +205,7 @@ COLLECTION_SCHEMAS = {
                 },
             }
         },
-        "validationLevel": "strict",
+        "validationLevel": "moderate",
         "validationAction": "error",
     },
     "leads": {
@@ -227,7 +227,7 @@ COLLECTION_SCHEMAS = {
                 },
             }
         },
-        "validationLevel": "strict",
+        "validationLevel": "moderate",
         "validationAction": "error",
     },
     "conversations": {
@@ -254,7 +254,7 @@ COLLECTION_SCHEMAS = {
                 },
             }
         },
-        "validationLevel": "strict",
+        "validationLevel": "moderate",
         "validationAction": "error",
     },
     "visitors": {
@@ -295,7 +295,7 @@ COLLECTION_SCHEMAS = {
                 },
             }
         },
-        "validationLevel": "strict",
+        "validationLevel": "moderate",
         "validationAction": "error",
     },
     "message_feedback": {
@@ -312,7 +312,7 @@ COLLECTION_SCHEMAS = {
                 },
             }
         },
-        "validationLevel": "strict",
+        "validationLevel": "moderate",
         "validationAction": "error",
     },
     "knowledge_gaps": {
@@ -336,7 +336,7 @@ COLLECTION_SCHEMAS = {
                 },
             }
         },
-        "validationLevel": "strict",
+        "validationLevel": "moderate",
         "validationAction": "error",
     },
 }
@@ -351,12 +351,9 @@ async def ensure_schemas():
         try:
             await db.create_collection(coll_name, **opts)
             print(f"[SCHEMA] Created collection '{coll_name}' with validator")
-        except OperationFailure as e:
-            if "Collection already exists" in str(e):
-                try:
-                    await db.command("collMod", coll_name, **opts)
-                    print(f"[SCHEMA] Updated validator for existing collection '{coll_name}'")
-                except OperationFailure as mod_err:
-                    print(f"[SCHEMA] Could not modify collection '{coll_name}': {mod_err}")
-            else:
-                print(f"[SCHEMA] Could not create collection '{coll_name}': {e}")
+        except CollectionInvalid:
+            try:
+                await db.command("collMod", coll_name, **opts)
+                print(f"[SCHEMA] Updated validator for existing collection '{coll_name}'")
+            except OperationFailure as mod_err:
+                print(f"[SCHEMA] Could not modify collection '{coll_name}': {mod_err}")
