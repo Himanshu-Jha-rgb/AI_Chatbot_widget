@@ -27,8 +27,8 @@ async def get_widget_config(current_tenant: dict = Depends(verify_api_key)):
         "suggested_questions": suggested,
     }
 
-# Max messages to send to GPT-4o (2 per turn = 10 turns of conversation)
-MAX_HISTORY = 20
+# Max messages to send to GPT-4o (2 per turn)
+MAX_HISTORY = 50
 MAX_QUERY_LENGTH = 500
 PER_TENANT_RATE_LIMIT = 100
 PER_SESSION_RATE_LIMIT = 20
@@ -208,9 +208,9 @@ If the user asks about this website, what it does, or what it offers, use the de
         messages.append({"role": "assistant", "content": answer})
         
         # --- Context Summarization Compaction ---
-        if len(messages) >= 10:
-            messages_to_keep = messages[-4:]
-            messages_to_summarize = messages[:-4]
+        if len(messages) >= 32:
+            messages_to_keep = messages[-30:]
+            messages_to_summarize = messages[:-30]
             summary = await _summarize_past_context(summary, messages_to_summarize)
             messages = messages_to_keep
 
@@ -295,13 +295,13 @@ IMPORTANT: If the context contains a specific URL for registration, signup, logi
     messages.append({"role": "assistant", "content": answer})
 
     # --- Context Summarization Compaction ---
-    if len(messages) >= 10:
-        messages_to_keep = messages[-4:]
-        messages_to_summarize = messages[:-4]
+    if len(messages) >= 32:
+        messages_to_keep = messages[-30:]
+        messages_to_summarize = messages[:-30]
         summary = await _summarize_past_context(summary, messages_to_summarize)
         messages = messages_to_keep
 
-    # Update MongoDB (keeps messages capped at max 10 elements)
+    # Update MongoDB (keeps messages capped at max 30 messages / 15 turns)
     await db.conversations.update_one(
         {"session_id": session_id},
         {"$set": {
@@ -533,9 +533,9 @@ If the user asks about pricing, demo, purchasing, or wants to be contacted, offe
             messages.append({"role": "assistant", "content": full_answer})
 
             # --- Summarization compaction ---
-            if len(messages) >= 10:
-                messages_to_keep = messages[-4:]
-                messages_to_summarize = messages[:-4]
+            if len(messages) >= 32:
+                messages_to_keep = messages[-30:]
+                messages_to_summarize = messages[:-30]
                 summary = await _summarize_past_context(summary, messages_to_summarize)
                 messages = messages_to_keep
 
@@ -722,12 +722,16 @@ async def _summarize_past_context(previous_summary: str, messages_to_summarize: 
         for msg in messages_to_summarize
     ])
     
+    total_chars = sum(len(msg["content"]) for msg in messages_to_summarize) + len(previous_summary)
+    word_limit = max(80, min(500, total_chars // 20))
+    max_tokens = word_limit * 2
+
     prompt = (
         "You are an AI assistant helping a website chatbot maintain its context. "
         "Summarize the following chat history between a Visitor and a Bot. "
         "Focus on the visitor's core intent, questions asked, and key information provided. "
         "Do not lose track of important customer details (like names, choices, or issues). "
-        "Keep the summary concise (under 80 words) and professional.\n\n"
+        f"Keep the summary concise (under {word_limit} words) and professional.\n\n"
     )
     if previous_summary:
         prompt += f"Previous Summary:\n{previous_summary}\n\n"
@@ -741,7 +745,7 @@ async def _summarize_past_context(previous_summary: str, messages_to_summarize: 
                 {"role": "system", "content": "You are a helpful assistant that summarizes chat history segments."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=150,
+            max_tokens=max_tokens,
             temperature=0.3
         )
         return resp.choices[0].message.content.strip()
