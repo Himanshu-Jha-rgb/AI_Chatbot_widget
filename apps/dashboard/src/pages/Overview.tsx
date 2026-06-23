@@ -8,7 +8,9 @@ import {
   MessageSquare, 
   TrendingUp,
   CheckCircle,
-  Chrome
+  Chrome,
+  Monitor,
+  ExternalLink
 } from 'lucide-react';
 
 interface TenantStatsData {
@@ -84,9 +86,22 @@ const Overview = () => {
   return (
     <div className="space-y-8 animate-fadeIn text-slate-100">
       {/* Header Info */}
-      <div>
-        <h2 className="text-2xl font-bold text-white tracking-tight">Console Overview</h2>
-        <p className="text-slate-400 text-sm mt-1">Real-time status of chatbot responses, vector search health, and user queries.</p>
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-white tracking-tight">Console Overview</h2>
+          <p className="text-slate-400 text-sm mt-1">Real-time status of chatbot responses, vector search health, and user queries.</p>
+        </div>
+        <div className="flex items-center gap-3 mt-4 sm:mt-0">
+          <a
+            href="/tenants/test"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 text-sm font-semibold text-white rounded-xl shadow-sm hover:bg-teal-700 transition-colors"
+          >
+            <Monitor size={16} />
+            <span>Test Chatbot</span>
+          </a>
+        </div>
       </div>
 
       {/* KPI Grid */}
