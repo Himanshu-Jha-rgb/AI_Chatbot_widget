@@ -3,6 +3,7 @@ import { privateAxios } from '../utils/axios';
 import { formatDate } from '../utils/date';
 import { SourceJob, PaginatedResponse } from '../interfaces';
 import { History as HistoryIcon, Globe, FileText, HelpCircle, UploadCloud, AlertCircle, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { LoadingSpinner } from '@chatbot/shared';
 
 const JOB_TYPE_LABELS: Record<string, string> = {
   crawl: 'Website Crawl',
@@ -51,11 +52,7 @@ const History = () => {
   }, [page]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <RefreshCw size={32} className="text-violet-400 animate-spin" />
-      </div>
-    );
+    return <LoadingSpinner message="Loading audit history..." />;
   }
 
   return (

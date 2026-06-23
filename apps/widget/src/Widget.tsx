@@ -1,10 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo, CSSProperties } from 'react';
 import { submitEnquiry, getWidgetConfig, submitFeedback, apiClient } from './api';
-import { WidgetProps, Message } from '@chatbot/shared';
+import { WidgetProps, Message, useIsMobile, useStyleInjection } from '@chatbot/shared';
 import { getPalette } from './utils/theme';
 import { useHostTheme } from './hooks/useHostTheme';
-import { useIsMobile } from './hooks/useIsMobile';
-import { useStyleInjection } from './hooks/useStyleInjection';
 import { Header } from './components/Header';
 import { FloatingButton } from './components/FloatingButton';
 import { MessageList } from './components/MessageList';
