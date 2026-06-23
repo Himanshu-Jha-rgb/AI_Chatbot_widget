@@ -3,7 +3,7 @@ import { privateAxios } from '../utils/axios';
 import { useStore, hasAccess } from '../store';
 import { LoadingSpinner } from '@chatbot/shared';
 import { useRbacError } from '../hooks/useRbacError';
-import { Copy, Check, RotateCw, Globe, Key, HelpCircle, Code, Plus, Trash2, Lock, FileText } from 'lucide-react';
+import { Copy, Check, RotateCw, Globe, Key, HelpCircle, Code, Plus, Trash2, Lock, FileText, ExternalLink, Monitor } from 'lucide-react';
 
 const Settings = () => {
   const { state } = useStore();
@@ -113,6 +113,17 @@ const Settings = () => {
 
   const widgetUrl = window.location.origin;
   const snippet = `<script src="${widgetUrl}/static/widget.js" data-api-key="${me.api_key}"></script>`;
+  const testUrl = `${widgetUrl}/tenants/test`;
+
+  const openTestPage = () => {
+    window.open(testUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  const copyTestUrl = () => {
+    navigator.clipboard.writeText(testUrl).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1700);
+  };
 
   return (
     <div className="space-y-8 text-slate-100 animate-fadeIn">
@@ -178,6 +189,37 @@ const Settings = () => {
               </button>
               <pre className="overflow-x-auto whitespace-pre-wrap">{snippet}</pre>
             </div>
+          </div>
+
+          {/* Test Chatbot */}
+          <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800/80 shadow-lg space-y-4">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Monitor size={18} className="text-teal-400" />
+              <span>Test Chatbot</span>
+            </h3>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Try your chatbot instantly without installing it on your website. Opens in a new tab with your API key pre-configured.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={openTestPage}
+                className="flex items-center justify-center gap-2 px-5 py-3 bg-teal-600 text-sm font-semibold text-white rounded-xl shadow-sm hover:bg-teal-700 transition-colors cursor-pointer"
+              >
+                <Monitor size={16} />
+                <span>Open Test Page</span>
+              </button>
+              <button
+                onClick={copyTestUrl}
+                className="flex items-center justify-center gap-2 px-5 py-3 bg-slate-800 text-sm font-semibold text-slate-200 rounded-xl border border-slate-700 hover:bg-slate-700 transition-colors cursor-pointer"
+              >
+                {copied ? <Check size={14} className="text-teal-400" /> : <ExternalLink size={14} />}
+                <span>{copied ? 'Copied!' : 'Copy Test URL'}</span>
+              </button>
+            </div>
+            <p className="text-xxs text-slate-500 font-semibold leading-relaxed truncate" title={testUrl}>
+              {testUrl}
+            </p>
           </div>
 
           {/* Domain Restriction */}

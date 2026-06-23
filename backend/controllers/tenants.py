@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi.responses import HTMLResponse
 from models.requests import TenantRegisterRequest, TenantLoginRequest, SuggestedQuestionsUpdateRequest
 from views.responses import TokenResponse, TenantResponse
 from core.auth import db, get_password_hash, verify_password, create_access_token, get_current_tenant, set_auth_cookie, clear_auth_cookie, hash_api_key
@@ -115,3 +116,84 @@ async def get_feedback_analytics(current_tenant: dict = Depends(get_current_tena
         "dislikes": dislikes,
         "like_ratio": round(likes / total * 100, 1) if total > 0 else 0,
     }
+
+
+@router.get("/test", response_class=HTMLResponse)
+async def test_chatbot(current_tenant: dict = Depends(get_current_tenant)):
+    """Serve a standalone test page with the widget pre-configured with tenant's API key."""
+    api_key = current_tenant["api_key"]
+    business_name = current_tenant.get("business_name") or current_tenant["domain"]
+    api_base_url = current_tenant.get("api_base_url") or ""
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Chatbot - {business_name}</title>
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #fafafa;
+            min-height: 100vh;
+        }}
+        .test-badge {{
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            background: #171717;
+            color: #ffffff;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            z-index: 9999;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border: 1px solid #ebebeb;
+        }}
+        .test-badge::before {{
+            content: "";
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #50e3c2;
+            border-radius: 50%;
+            margin-right: 8px;
+            vertical-align: middle;
+            animation: pulse 2s infinite;
+        }}
+        @keyframes pulse {{
+            0%, 100% {{ opacity: 1; }}
+            50% {{ opacity: 0.4; }}
+        }}
+        .powered-by {{
+            position: fixed;
+            bottom: 16px;
+            left: 16px;
+            font-size: 11px;
+            color: #888888;
+            z-index: 9998;
+        }}
+        .powered-by a {{
+            color: #0070f3;
+            text-decoration: none;
+        }}
+        .powered-by a:hover {{
+            text-decoration: underline;
+        }}
+    </style>
+</head>
+<body>
+    <div class="test-badge">Test Mode — {business_name}</div>
+    <div class="powered-by">
+        Powered by <a href="https://your-platform.com" target="_blank" rel="noopener">AI Chatbot Platform</a>
+    </div>
+    <script src="/static/widget.js" data-api-key="{api_key}" data-api-base-url="{api_base_url}"></script>
+</body>
+</html>"""
+    return HTMLResponse(content=html_content)
