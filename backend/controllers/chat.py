@@ -33,7 +33,7 @@ MAX_QUERY_LENGTH = 500
 PER_TENANT_RATE_LIMIT = 100
 PER_SESSION_RATE_LIMIT = 20
 RATE_WINDOW_SECONDS = 60
-DIRECT_ANSWER_THRESHOLD = 0.75
+DIRECT_ANSWER_THRESHOLD = 0.5
 
 # In-memory sliding window rate limiters (reset on server restart)
 _tenant_limits: dict[str, deque] = defaultdict(deque)
