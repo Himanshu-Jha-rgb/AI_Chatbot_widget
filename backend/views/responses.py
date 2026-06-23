@@ -96,6 +96,8 @@ class TenantResponse(BaseModel):
     description: Optional[str] = None
     created_at: datetime
     api_key: Optional[str] = None
+    suggested_questions_manual: List[str] = []
+    suggested_questions_auto: List[str] = []
 
 
 class CrawlJobStatusResponse(BaseModel):

@@ -20,7 +20,7 @@ COOKIE_MAX_AGE = 604800  # 7 days in seconds
 limiter = Limiter(key_func=get_remote_address)
 
 client = AsyncIOMotorClient(settings.MONGODB_URI)
-db = client.chatbot_db
+db = client[settings.MONGODB_DB_NAME]
 
 def verify_password(plain_password, hashed_password):
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
@@ -48,7 +48,7 @@ def set_auth_cookie(response: Response, token: str):
         max_age=COOKIE_MAX_AGE,
         httponly=True,
         secure=settings.COOKIE_SECURE,
-        samesite="lax",
+        samesite=settings.COOKIE_SAMESITE,
         path="/",
     )
 
@@ -58,7 +58,7 @@ def clear_auth_cookie(response: Response):
         path="/",
         httponly=True,
         secure=settings.COOKIE_SECURE,
-        samesite="lax",
+        samesite=settings.COOKIE_SAMESITE,
     )
 
 async def get_current_user(request: Request):
