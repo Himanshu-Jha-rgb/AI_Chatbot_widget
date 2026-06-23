@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
 from starlette.middleware.base import BaseHTTPMiddleware
-from routers import tenants, crawl, chat, sources, faqs, text_docs, leads, admin, knowledge_improvement
+from controllers import tenants, crawl, chat, sources, faqs, text_docs, leads, admin, knowledge_improvement
 from core.config import settings
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -14,11 +14,6 @@ app = FastAPI(title="Chatbot Widget SaaS")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Origin-reflection middleware for credentialed cross-origin requests.
-# The embedded widget uses credentials: "include" for cookies, and the
-# browser rejects Access-Control-Allow-Origin: * when credentials are set.
-# Reflecting the request origin is the standard approach for SaaS embedded
-# widgets where customer origins are not known ahead of time.
 class CORSRreflectMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         origin = request.headers.get("origin")
@@ -32,7 +27,9 @@ class CORSRreflectMiddleware(BaseHTTPMiddleware):
         else:
             try:
                 response = await call_next(request)
-            except Exception:
+            except Exception as exc:
+                import traceback
+                traceback.print_exc()
                 response = Response(status_code=500, content="Internal Server Error")
 
         if origin:
@@ -54,7 +51,6 @@ app.include_router(leads.router)
 app.include_router(admin.router)
 app.include_router(knowledge_improvement.router)
 
-# Base paths calculated relative to this file
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.abspath(os.path.join(backend_dir, ".."))
 
@@ -62,50 +58,44 @@ widget_dist = os.path.join(root_dir, "apps/widget/dist")
 dashboard_dist = os.path.join(root_dir, "apps/dashboard/dist")
 uploads_dir = os.path.join(backend_dir, "uploads")
 
-# Mount widget dist directory
 os.makedirs(widget_dist, exist_ok=True)
 os.makedirs(uploads_dir, exist_ok=True)
 app.mount("/static", StaticFiles(directory=widget_dist), name="static")
 
-# Mount dashboard built assets (JS, CSS, etc.)
 os.makedirs(dashboard_dist, exist_ok=True)
 dashboard_assets = os.path.join(dashboard_dist, "assets")
 if os.path.isdir(dashboard_assets):
     app.mount("/dashboard/assets", StaticFiles(directory=dashboard_assets), name="dashboard_assets")
 
-# Serve dashboard index.html for all /dashboard/* paths (SPA catch-all)
+
 @app.get("/dashboard/{full_path:path}")
 async def dashboard_spa(full_path: str):
     return FileResponse(os.path.join(dashboard_dist, "index.html"))
+
 
 @app.get("/")
 async def root():
     return RedirectResponse(url="/dashboard/")
 
+
 @app.on_event("startup")
 async def apply_db_schemas():
-    """Apply MongoDB JSON Schema validators to all collections."""
     from core.schema_validator import ensure_schemas
     await ensure_schemas()
 
+
 @app.on_event("startup")
 async def cleanup_stale_jobs():
-    """Mark any 'running' crawl jobs as failed — they died when Render killed the process."""
     from datetime import datetime, timezone
-    result = await db.crawl_jobs.update_many(
-        {"status": "running"},
-        {"$set": {
-            "status": "failed",
-            "error": "Server restarted — crawl task was interrupted",
-            "finished_at": datetime.now(timezone.utc),
-        }}
-    )
-    if result.modified_count:
-        print(f"Cleaned up {result.modified_count} stale crawl job(s)")
+    from repositories.crawl_job_repository import CrawlJobRepository
+    repo = CrawlJobRepository()
+    modified = await repo.mark_stale_running_as_failed()
+    if modified:
+        print(f"Cleaned up {modified} stale crawl job(s)")
+
 
 @app.on_event("startup")
 async def backfill_api_key_hashes():
-    """Backfill api_key_hash for any existing tenants that don't have it."""
     from core.auth import hash_api_key
     cursor = db.tenants.find({"api_key_hash": {"$exists": False}}, {"tenant_id": 1, "api_key": 1})
     count = 0
@@ -117,6 +107,7 @@ async def backfill_api_key_hashes():
         count += 1
     if count:
         print(f"Backfilled api_key_hash for {count} existing tenant(s)")
+
 
 @app.on_event("startup")
 async def ensure_lookup_indexes():

@@ -4,15 +4,20 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 
 from core.auth import db, get_current_tenant
-from models.schemas import TextDocCreate, TextDocUpdate
+from models.requests import TextDocCreateRequest, TextDocUpdateRequest
+from views.responses import TextDocResponse
+from services.ingestion import ingest_document
+from services.suggested import generate_suggested_questions
+from repositories.source_repository import SourceRepository
+from repositories.text_doc_repository import TextDocRepository
 
 router = APIRouter(prefix="/dashboard/sources/{source_id}/docs", tags=["text_docs"])
+source_repo = SourceRepository()
+doc_repo = TextDocRepository()
 
 
 async def _verify_source(tenant_id: str, source_id: str) -> dict:
-    source = await db.sources.find_one(
-        {"tenant_id": tenant_id, "source_id": source_id},
-    )
+    source = await source_repo.get_by_source_id(tenant_id, source_id)
     if not source:
         raise HTTPException(status_code=404, detail="Source not found")
     if source["source_type"] != "text":
@@ -25,24 +30,19 @@ async def list_docs(
     source_id: str,
     current_tenant: dict = Depends(get_current_tenant),
 ):
-    """List all text documents for a source."""
     tenant_id = current_tenant["tenant_id"]
     await _verify_source(tenant_id, source_id)
 
-    docs = await db.documents.find(
-        {"tenant_id": tenant_id, "source_id": source_id},
-        {"_id": 0},
-    ).sort("created_at", 1).to_list(length=1000)
+    docs = await doc_repo.get_by_source(tenant_id, source_id)
     return docs
 
 
 @router.post("", status_code=201)
 async def create_doc(
     source_id: str,
-    body: TextDocCreate,
+    body: TextDocCreateRequest,
     current_tenant: dict = Depends(get_current_tenant),
 ):
-    """Create a new text document."""
     tenant_id = current_tenant["tenant_id"]
     await _verify_source(tenant_id, source_id)
 
@@ -57,7 +57,7 @@ async def create_doc(
         "created_at": now,
         "updated_at": now,
     }
-    await db.documents.insert_one(doc)
+    await doc_repo.create(doc)
     doc.pop("_id", None)
     return doc
 
@@ -66,10 +66,9 @@ async def create_doc(
 async def update_doc(
     source_id: str,
     doc_id: str,
-    body: TextDocUpdate,
+    body: TextDocUpdateRequest,
     current_tenant: dict = Depends(get_current_tenant),
 ):
-    """Update an existing text document."""
     tenant_id = current_tenant["tenant_id"]
     await _verify_source(tenant_id, source_id)
 
@@ -84,17 +83,11 @@ async def update_doc(
 
     update["updated_at"] = datetime.now(timezone.utc)
 
-    result = await db.documents.update_one(
-        {"tenant_id": tenant_id, "source_id": source_id, "doc_id": doc_id},
-        {"$set": update},
-    )
-    if result.modified_count == 0:
+    success = await doc_repo.update(tenant_id, source_id, doc_id, update)
+    if not success:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    doc = await db.documents.find_one(
-        {"tenant_id": tenant_id, "source_id": source_id, "doc_id": doc_id},
-        {"_id": 0},
-    )
+    doc = await doc_repo.get_by_doc_id(tenant_id, source_id, doc_id)
     return doc
 
 
@@ -104,19 +97,13 @@ async def delete_doc(
     doc_id: str,
     current_tenant: dict = Depends(get_current_tenant),
 ):
-    """Delete a text document."""
     tenant_id = current_tenant["tenant_id"]
     await _verify_source(tenant_id, source_id)
 
-    result = await db.documents.delete_one({
-        "tenant_id": tenant_id,
-        "source_id": source_id,
-        "doc_id": doc_id,
-    })
-    if result.deleted_count == 0:
+    success = await doc_repo.delete(tenant_id, source_id, doc_id)
+    if not success:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    # Also remove its chunks
     await db.chunks.delete_many({
         "tenant_id": tenant_id,
         "source_id": source_id,
@@ -136,10 +123,7 @@ async def delete_doc(
     return {"status": "deleted", "doc_id": doc_id}
 
 
-# --- Indexing ---
-
 async def _create_source_job(tenant_id: str, source_id: str, job_type: str, config: dict = None) -> str:
-    """Create a source job entry for audit history."""
     job_id = str(uuid.uuid4())
     job_doc = {
         "tenant_id": tenant_id,
@@ -160,27 +144,19 @@ async def _create_source_job(tenant_id: str, source_id: str, job_type: str, conf
 
 
 async def _update_source_job(job_id: str, update: dict) -> None:
-    """Update a source job entry."""
     await db.source_jobs.update_one({"job_id": job_id}, {"$set": update})
 
 
 async def _index_all_docs(tenant_id: str, source_id: str):
-    """Background task: index all text documents as chunks."""
-    from services.ingestion import ingest_document
-    from services.suggested import generate_suggested_questions
-
     job_id = await _create_source_job(tenant_id, source_id, "text_index")
     await _update_source_job(job_id, {"status": "running", "started_at": datetime.now(timezone.utc)})
-    
+
     try:
-        # Delete existing chunks for this source
         await db.chunks.delete_many({"tenant_id": tenant_id, "source_id": source_id})
         await db.parents.delete_many({"tenant_id": tenant_id, "source_id": source_id})
         await db.pages.delete_many({"tenant_id": tenant_id, "source_id": source_id})
 
-        docs = await db.documents.find(
-            {"tenant_id": tenant_id, "source_id": source_id},
-        ).sort("created_at", 1).to_list(length=1000)
+        docs = await doc_repo.get_by_source(tenant_id, source_id)
 
         total_chunks = 0
         for doc in docs:
@@ -195,32 +171,25 @@ async def _index_all_docs(tenant_id: str, source_id: str):
             )
             total_chunks += result["chunks_created"]
 
-        await db.sources.update_one(
-            {"tenant_id": tenant_id, "source_id": source_id},
-            {"$set": {
-                "status": "ready",
-                "last_indexed_at": datetime.now(timezone.utc),
-                "updated_at": datetime.now(timezone.utc),
-            }}
-        )
+        await source_repo.update(tenant_id, source_id, {
+            "status": "ready",
+            "last_indexed_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        })
         await _update_source_job(job_id, {
             "status": "done",
             "chunks_created": total_chunks,
             "finished_at": datetime.now(timezone.utc),
         })
 
-        # Auto-generate suggested questions after indexing
         import asyncio
         asyncio.create_task(generate_suggested_questions(tenant_id))
     except Exception as e:
         print(f"Text doc indexing failed for {source_id}: {e}")
-        await db.sources.update_one(
-            {"tenant_id": tenant_id, "source_id": source_id},
-            {"$set": {
-                "status": "failed",
-                "updated_at": datetime.now(timezone.utc),
-            }}
-        )
+        await source_repo.update(tenant_id, source_id, {
+            "status": "failed",
+            "updated_at": datetime.now(timezone.utc),
+        })
         await _update_source_job(job_id, {
             "status": "failed",
             "error": str(e),
@@ -234,14 +203,13 @@ async def index_docs(
     background_tasks: BackgroundTasks,
     current_tenant: dict = Depends(get_current_tenant),
 ):
-    """Index all text documents as searchable chunks."""
     tenant_id = current_tenant["tenant_id"]
     await _verify_source(tenant_id, source_id)
 
-    await db.sources.update_one(
-        {"tenant_id": tenant_id, "source_id": source_id},
-        {"$set": {"status": "indexing", "updated_at": datetime.now(timezone.utc)}},
-    )
+    await source_repo.update(tenant_id, source_id, {
+        "status": "indexing",
+        "updated_at": datetime.now(timezone.utc)
+    })
 
     background_tasks.add_task(_index_all_docs, tenant_id, source_id)
     return {"status": "indexing", "source_id": source_id}

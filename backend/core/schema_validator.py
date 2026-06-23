@@ -162,7 +162,7 @@ COLLECTION_SCHEMAS = {
         "validationLevel": "moderate",
         "validationAction": "error",
     },
-    "tenants": {
+    "parents": {
         "validator": {
             "$jsonSchema": {
                 "bsonType": "object",

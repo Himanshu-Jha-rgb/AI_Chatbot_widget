@@ -164,13 +164,26 @@ async def _crawl_with_firecrawl(seed_url: str) -> list[dict]:
         max_wait = 480
         elapsed = 0
 
+        max_retries = 3
+        retry_delay = 10
+
         while elapsed < max_wait:
             await asyncio.sleep(5)
             elapsed += 5
-            status_response = await client.get(
-                f"https://api.firecrawl.dev/v2/crawl/{firecrawl_job_id}",
-                headers=headers
-            )
+            try:
+                status_response = await client.get(
+                    f"https://api.firecrawl.dev/v2/crawl/{firecrawl_job_id}",
+                    headers=headers
+                )
+            except (httpx.ConnectError, httpx.RemoteProtocolError) as e:
+                if max_retries > 0:
+                    max_retries -= 1
+                    print(f"[FIRECRAWL] Poll ({elapsed}s): Connection error ({e}), retrying in {retry_delay}s... (retries left: {max_retries})")
+                    await asyncio.sleep(retry_delay)
+                    elapsed += retry_delay
+                    continue
+                raise
+
             if status_response.status_code == 429:
                 print(f"[FIRECRAWL] Poll ({elapsed}s): Rate limited, retrying in 10s...")
                 await asyncio.sleep(10)
