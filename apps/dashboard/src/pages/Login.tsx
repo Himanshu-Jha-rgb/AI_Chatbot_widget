@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { publicAxios } from '../utils/axios';
-import { Bot, AlertCircle } from 'lucide-react';
+import { Bot, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 const Login = () => {
   const [isRegister, setIsRegister] = useState(false);
   const [domain, setDomain] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [businessName, setBusinessName] = useState('');
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
@@ -112,14 +113,23 @@ const Login = () => {
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
                 Password
               </label>
-              <input
-                type="password"
-                placeholder="Enter password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full rounded-xl border border-slate-800 bg-slate-950 px-4 py-3 text-slate-200 placeholder-slate-600 focus:border-violet-600 focus:outline-none transition-all duration-200 text-sm"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Enter password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 pl-4 pr-10 py-3 text-slate-200 placeholder-slate-600 focus:border-violet-600 focus:outline-none transition-all duration-200 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <button

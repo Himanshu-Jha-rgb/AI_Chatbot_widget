@@ -16,12 +16,14 @@ const Crawl = () => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
   const { rbacError, triggerRbacError } = useRbacError();
   const pageSize = 20;
 
   const isEditor = hasAccess(state.role, 'write');
 
   const fetchHistory = async (p: number) => {
+    setIsLoading(true);
     try {
       const res = await privateAxios.get(`/dashboard/crawl/history?page=${p}&page_size=${pageSize}`);
       const data = res.data;
@@ -30,6 +32,8 @@ const Crawl = () => {
       setTotalPages(data.total_pages || 1);
     } catch (err) {
       console.error('Failed to fetch crawl history:', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -160,13 +164,12 @@ const Crawl = () => {
         <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800/80 shadow-lg space-y-4 animate-slideUp">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-white">Active Crawl Progress</h3>
-            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xxs font-bold uppercase ${
-              jobStatus.status === 'done' 
-                ? 'bg-teal-950/40 text-teal-400 border border-teal-900/30' 
-                : jobStatus.status === 'failed' 
-                ? 'bg-rose-950/40 text-rose-400 border border-rose-900/30' 
-                : 'bg-amber-950/40 text-amber-400 border border-amber-900/30 animate-pulse'
-            }`}>
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xxs font-bold uppercase ${jobStatus.status === 'done'
+                ? 'bg-teal-950/40 text-teal-400 border border-teal-900/30'
+                : jobStatus.status === 'failed'
+                  ? 'bg-rose-950/40 text-rose-400 border border-rose-900/30'
+                  : 'bg-amber-950/40 text-amber-400 border border-amber-900/30 animate-pulse'
+              }`}>
               {jobStatus.status}
             </span>
           </div>
@@ -208,7 +211,7 @@ const Crawl = () => {
 
         {history.length === 0 ? (
           <div className="px-6 py-12 text-center">
-            <RefreshCw size={36} className="text-slate-700 mx-auto mb-3 animate-spin" />
+            <RefreshCw size={36} className={`text-slate-700 mx-auto mb-3 ${isLoading ? 'animate-spin' : ''}`} />
             <h4 className="text-sm font-bold text-white">No crawls recorded</h4>
             <p className="text-xs text-slate-500 mt-1">Start your first crawler above.</p>
           </div>
@@ -232,13 +235,12 @@ const Crawl = () => {
                       {job.seed_url}
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xxs font-bold uppercase ${
-                        job.status === 'done' 
-                          ? 'bg-teal-950/40 text-teal-400 border border-teal-900/30' 
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xxs font-bold uppercase ${job.status === 'done'
+                          ? 'bg-teal-950/40 text-teal-400 border border-teal-900/30'
                           : job.status === 'failed' || job.status === 'purged'
-                          ? 'bg-rose-950/40 text-rose-400 border border-rose-900/30'
-                          : 'bg-amber-950/40 text-amber-400 border border-amber-900/30'
-                      }`}>
+                            ? 'bg-rose-950/40 text-rose-400 border border-rose-900/30'
+                            : 'bg-amber-950/40 text-amber-400 border border-amber-900/30'
+                        }`}>
                         {job.status}
                       </span>
                     </td>

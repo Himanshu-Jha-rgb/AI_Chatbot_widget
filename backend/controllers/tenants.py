@@ -1,6 +1,6 @@
 import os
 import string
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from fastapi.responses import HTMLResponse
 from models.requests import TenantRegisterRequest, TenantLoginRequest, SuggestedQuestionsUpdateRequest
 from views.responses import TokenResponse, TenantResponse
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/tenants", tags=["tenants"])
 tenant_repo = TenantRepository()
 
 @router.post("/register", response_model=TokenResponse)
-async def register(tenant: TenantRegisterRequest, response: Response):
+async def register(tenant: TenantRegisterRequest, response: Response, request: Request):
     existing = await tenant_repo.get_by_domain(tenant.domain)
     if existing:
         raise HTTPException(status_code=400, detail="Domain already registered")
@@ -40,22 +40,22 @@ async def register(tenant: TenantRegisterRequest, response: Response):
     await tenant_repo.create(tenant_data)
 
     access_token = create_access_token(data={"sub": tenant_id, "role": "tenant"})
-    set_auth_cookie(response, access_token)
+    set_auth_cookie(response, access_token, request)
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/login", response_model=TokenResponse)
-async def login(tenant: TenantLoginRequest, response: Response):
+async def login(tenant: TenantLoginRequest, response: Response, request: Request):
     db_tenant = await tenant_repo.get_by_domain(tenant.domain)
     if not db_tenant or not verify_password(tenant.password, db_tenant["password_hash"]):
         raise HTTPException(status_code=400, detail="Incorrect domain or password")
 
     access_token = create_access_token(data={"sub": db_tenant["tenant_id"], "role": "tenant"})
-    set_auth_cookie(response, access_token)
+    set_auth_cookie(response, access_token, request)
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/logout")
-async def logout(response: Response):
-    clear_auth_cookie(response)
+async def logout(response: Response, request: Request):
+    clear_auth_cookie(response, request)
     return {"message": "logged out"}
 
 @router.get("/me", response_model=TenantResponse)

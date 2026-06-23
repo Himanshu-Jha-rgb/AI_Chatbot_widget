@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from pydantic import BaseModel
 from core.auth import create_access_token, get_current_admin, db, set_auth_cookie, clear_auth_cookie
 from core.config import settings
@@ -14,10 +14,10 @@ ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
 @router.post("/login")
-async def admin_login(creds: AdminLogin, response: Response):
+async def admin_login(creds: AdminLogin, response: Response, request: Request):
     if creds.username == ADMIN_USERNAME and creds.password == ADMIN_PASSWORD:
         access_token = create_access_token(data={"sub": "system_admin", "role": "admin"})
-        set_auth_cookie(response, access_token)
+        set_auth_cookie(response, access_token, request)
         return {"access_token": access_token, "token_type": "bearer"}
 
     raise HTTPException(
@@ -27,8 +27,8 @@ async def admin_login(creds: AdminLogin, response: Response):
     )
 
 @router.post("/logout")
-async def admin_logout(response: Response):
-    clear_auth_cookie(response)
+async def admin_logout(response: Response, request: Request):
+    clear_auth_cookie(response, request)
     return {"message": "logged out"}
 
 @router.get("/me")

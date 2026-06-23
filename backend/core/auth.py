@@ -41,24 +41,44 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET, algorithm=ALGORITHM)
     return encoded_jwt
 
-def set_auth_cookie(response: Response, token: str):
+def set_auth_cookie(response: Response, token: str, request: Request = None):
+    secure = settings.COOKIE_SECURE
+    samesite = settings.COOKIE_SAMESITE
+
+    if request:
+        is_secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+        if not is_secure:
+            secure = False
+            if samesite == "none":
+                samesite = "lax"
+
     response.set_cookie(
         key=COOKIE_NAME,
         value=token,
         max_age=COOKIE_MAX_AGE,
         httponly=True,
-        secure=settings.COOKIE_SECURE,
-        samesite=settings.COOKIE_SAMESITE,
+        secure=secure,
+        samesite=samesite,
         path="/",
     )
 
-def clear_auth_cookie(response: Response):
+def clear_auth_cookie(response: Response, request: Request = None):
+    secure = settings.COOKIE_SECURE
+    samesite = settings.COOKIE_SAMESITE
+
+    if request:
+        is_secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+        if not is_secure:
+            secure = False
+            if samesite == "none":
+                samesite = "lax"
+
     response.delete_cookie(
         key=COOKIE_NAME,
         path="/",
         httponly=True,
-        secure=settings.COOKIE_SECURE,
-        samesite=settings.COOKIE_SAMESITE,
+        secure=secure,
+        samesite=samesite,
     )
 
 async def get_current_user(request: Request):
