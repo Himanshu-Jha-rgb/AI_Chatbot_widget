@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from core.auth import get_current_tenant, db
 from services.embedder import openai_client
 from services.ingestion import ingest_faq_pair
+from repositories.knowledge_gap_repository import KnowledgeGapRepository
+from repositories.source_repository import SourceRepository
 from datetime import datetime, timezone
 from typing import Optional
 from bson import ObjectId
@@ -9,6 +11,7 @@ import numpy as np
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/dashboard/knowledge", tags=["knowledge-improvement"])
+gap_repo = KnowledgeGapRepository()
 
 
 class GapResponse(BaseModel):
@@ -25,7 +28,7 @@ class GapResponse(BaseModel):
 
 
 class ResolveGapRequest(BaseModel):
-    action: str  # "create_faq" | "dismiss" | "merge"
+    action: str
     faq_question: Optional[str] = None
     faq_answer: Optional[str] = None
     source_id: Optional[str] = None
@@ -40,7 +43,6 @@ async def list_knowledge_gaps(
     limit: int = Query(50),
     skip: int = Query(0),
 ):
-    """List knowledge gaps for the tenant with similar FAQs attached."""
     tenant_id = current_tenant["tenant_id"]
 
     query_filter = {"tenant_id": tenant_id}
@@ -49,11 +51,9 @@ async def list_knowledge_gaps(
     if gap_type:
         query_filter["gap_type"] = gap_type
 
-    # Use MongoDB native pagination
     cursor = db.knowledge_gaps.find(query_filter).sort("count", -1).skip(skip).limit(limit)
     gaps = await cursor.to_list(limit)
 
-    # Get all FAQs with embeddings for similarity search
     faqs = await db.faqs.find({
         "tenant_id": tenant_id,
         "embedding": {"$exists": True}
@@ -66,7 +66,6 @@ async def list_knowledge_gaps(
             gap.pop("_id", None)
             gap_embedding = gap.pop("embedding", None)
 
-            # Find similar FAQs if gap has embedding
             similar_faqs = []
             if gap_embedding and faqs:
                 gap_emb = np.array(gap_embedding)
@@ -80,7 +79,6 @@ async def list_knowledge_gaps(
                                 "question": faq["question"],
                                 "similarity": round(float(cos_sim), 3),
                             })
-                # Sort by similarity and limit to top 3
                 similar_faqs = sorted(similar_faqs, key=lambda x: x["similarity"], reverse=True)[:3]
 
             gap["similar_faqs"] = similar_faqs
@@ -97,7 +95,6 @@ async def resolve_knowledge_gap(
     req: ResolveGapRequest,
     current_tenant: dict = Depends(get_current_tenant),
 ):
-    """Resolve a knowledge gap by creating an FAQ or dismissing."""
     tenant_id = current_tenant["tenant_id"]
 
     gap = await db.knowledge_gaps.find_one({"_id": ObjectId(gap_id), "tenant_id": tenant_id})
@@ -115,7 +112,6 @@ async def resolve_knowledge_gap(
             answer=req.faq_answer,
         )
 
-        # Generate embedding for the FAQ
         embedding_resp = await openai_client.embeddings.create(
             model="text-embedding-3-small",
             input=f"Q: {req.faq_question}\nA: {req.faq_answer}",
@@ -144,12 +140,11 @@ async def resolve_knowledge_gap(
     elif req.action == "merge":
         if not req.merge_into_id:
             raise HTTPException(status_code=400, detail="merge_into_id required for merge action")
-        
+
         target_gap = await db.knowledge_gaps.find_one({"_id": ObjectId(req.merge_into_id), "tenant_id": tenant_id})
         if not target_gap:
             raise HTTPException(status_code=404, detail="Target gap not found")
-        
-        # Merge counts and update timestamps
+
         await db.knowledge_gaps.update_one(
             {"_id": ObjectId(req.merge_into_id)},
             {
@@ -157,10 +152,9 @@ async def resolve_knowledge_gap(
                 "$set": {"last_seen": max(gap.get("last_seen", datetime.now(timezone.utc)), target_gap.get("last_seen", datetime.now(timezone.utc)))}
             }
         )
-        
-        # Delete the source gap
+
         await db.knowledge_gaps.delete_one({"_id": ObjectId(gap_id)})
-        
+
         return {"status": "ok", "merged_into": req.merge_into_id}
 
     else:
@@ -169,15 +163,13 @@ async def resolve_knowledge_gap(
 
 @router.get("/gaps/stats")
 async def get_gap_stats(current_tenant: dict = Depends(get_current_tenant)):
-    """Get knowledge gap statistics."""
     tenant_id = current_tenant["tenant_id"]
 
     total = await db.knowledge_gaps.count_documents({"tenant_id": tenant_id})
-    open_count = await db.knowledge_gaps.count_documents({"tenant_id": tenant_id, "status": "open"})
-    resolved = await db.knowledge_gaps.count_documents({"tenant_id": tenant_id, "status": "resolved"})
-    dismissed = await db.knowledge_gaps.count_documents({"tenant_id": tenant_id, "status": "dismissed"})
-    
-    # Count by gap_type
+    open_count = await gap_repo.count_by_tenant(tenant_id, status="open")
+    resolved = await gap_repo.count_by_tenant(tenant_id, status="resolved")
+    dismissed = await gap_repo.count_by_tenant(tenant_id, status="dismissed")
+
     no_context_open = await db.knowledge_gaps.count_documents({"tenant_id": tenant_id, "status": "open", "gap_type": "no_context"})
     out_of_scope_open = await db.knowledge_gaps.count_documents({"tenant_id": tenant_id, "status": "open", "gap_type": "out_of_scope"})
 
@@ -201,7 +193,6 @@ async def get_gap_stats(current_tenant: dict = Depends(get_current_tenant)):
 
 @router.post("/gaps/cluster")
 async def cluster_gaps(current_tenant: dict = Depends(get_current_tenant)):
-    """Re-cluster gaps by similarity using Union-Find approach."""
     tenant_id = current_tenant["tenant_id"]
 
     gaps = await db.knowledge_gaps.find(
@@ -225,7 +216,6 @@ async def cluster_gaps(current_tenant: dict = Depends(get_current_tenant)):
         if px != py:
             parent[px] = py
 
-    # Build clusters using Union-Find
     embeddings = {}
     for gap in gaps:
         gid = str(gap["_id"])
@@ -241,7 +231,6 @@ async def cluster_gaps(current_tenant: dict = Depends(get_current_tenant)):
             if cos_sim > SIMILARITY_THRESHOLD:
                 union(id_a, id_b)
 
-    # Assign cluster IDs based on connected components
     clusters = {}
     for gap_id in gap_ids:
         root = find(gap_id)
@@ -258,23 +247,22 @@ async def cluster_gaps(current_tenant: dict = Depends(get_current_tenant)):
 
 @router.post("/gaps/cleanup")
 async def cleanup_duplicates(current_tenant: dict = Depends(get_current_tenant)):
-    """Find and merge duplicate gaps with normalized text matching."""
     import re
     tenant_id = current_tenant["tenant_id"]
-    
+
     gaps = await db.knowledge_gaps.find(
         {"tenant_id": tenant_id, "status": "open"}
     ).to_list(1000)
-    
+
     def normalize_query(q):
         n = q.lower().strip()
         n = re.sub(r'[^\w\s]', '', n)
         n = re.sub(r'\s+', ' ', n)
         return n
-    
+
     merged = 0
     seen = {}
-    
+
     for gap in gaps:
         norm = normalize_query(gap["query"])
         if norm in seen:
@@ -290,5 +278,5 @@ async def cleanup_duplicates(current_tenant: dict = Depends(get_current_tenant))
             merged += 1
         else:
             seen[norm] = str(gap["_id"])
-    
+
     return {"merged": merged, "remaining": len(gaps) - merged}

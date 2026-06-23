@@ -1,8 +1,9 @@
 import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Locate the .env file in the backend folder
-backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Traverse up from core/ to backend/
+_dir = os.path.dirname(os.path.abspath(__file__))
+backend_dir = os.path.dirname(_dir)
 env_file_path = os.path.join(backend_dir, ".env")
 
 class Settings(BaseSettings):

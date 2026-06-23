@@ -23,6 +23,7 @@ const STATUS_STYLES: Record<string, string> = {
   failed: 'bg-rose-950/40 text-rose-400 border border-rose-900/30',
   running: 'bg-amber-950/40 text-amber-400 border border-amber-900/30 animate-pulse',
   queued: 'bg-slate-800 text-slate-400 border border-slate-700',
+  purged: 'bg-slate-950/60 text-slate-500 border border-slate-800 line-through',
 };
 
 const History = () => {

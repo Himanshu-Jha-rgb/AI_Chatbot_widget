@@ -1,9 +1,12 @@
 from fastapi import APIRouter, Depends, Request, Response, HTTPException, WebSocket, WebSocketDisconnect, Query
-from models.schemas import ChatRequest, ChatResponse, Source, FeedbackRequest
-from core.auth import verify_api_key, db, limiter, hash_api_key
+from models.requests import ChatRequest, FeedbackRequest
+from views.responses import ChatResponse, ChatSource
+from core.auth import verify_api_key, db, limiter
 from core.config import settings
 from services.vector_search import search_chunks
 from services.embedder import openai_client
+from repositories.visitor_repository import VisitorRepository
+from repositories.feedback_repository import FeedbackRepository
 import uuid
 import time
 import numpy as np
@@ -251,7 +254,7 @@ If the user asks about this website, what it does, or what it offers, use the de
         section_path = c.get("section_path")
         source_key = (c["url"], section_path or section_title or "")
         if source_key not in seen_sources:
-            sources.append(Source(
+            sources.append(ChatSource(
                 url=c["url"],
                 title=c.get("title") or "Relevant Page",
                 section_title=section_title,

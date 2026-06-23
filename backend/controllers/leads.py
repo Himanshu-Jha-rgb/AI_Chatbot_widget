@@ -4,10 +4,13 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
 
 from core.auth import db, get_current_tenant, verify_api_key
-from models.schemas import EnquirySubmit, LeadResponse
+from models.requests import EnquirySubmitRequest
+from views.responses import LeadResponse, DashboardLeadResponse
 from services.embedder import openai_client
+from repositories.lead_repository import LeadRepository
 
 router = APIRouter(tags=["leads"])
+lead_repo = LeadRepository()
 
 _SUMMARIZE_PROMPT = (
     "Summarize the following conversation into one concise sentence "
@@ -17,7 +20,6 @@ _SUMMARIZE_PROMPT = (
 
 
 async def _summarize_context(context: str) -> str:
-    """Summarize conversation context into a short description."""
     if not context or len(context.strip()) < 10:
         return ""
     try:
@@ -32,16 +34,13 @@ async def _summarize_context(context: str) -> str:
         )
         return resp.choices[0].message.content.strip()
     except Exception:
-        # If summarization fails, fall back to first 200 chars of raw context
         return context.strip()[:200]
 
 
 @router.post("/leads", response_model=LeadResponse)
-async def submit_lead(req: EnquirySubmit, current_tenant: dict = Depends(verify_api_key)):
-    """Submit an enquiry form lead (from the widget)."""
+async def submit_lead(req: EnquirySubmitRequest, current_tenant: dict = Depends(verify_api_key)):
     tenant_id = current_tenant["tenant_id"]
 
-    # Summarize the conversation context
     summary = await _summarize_context(req.message or "")
 
     lead = {
@@ -57,20 +56,13 @@ async def submit_lead(req: EnquirySubmit, current_tenant: dict = Depends(verify_
         "created_at": datetime.now(timezone.utc),
     }
 
-    await db.leads.insert_one(lead)
+    await lead_repo.create(lead)
 
     return LeadResponse(success=True, message="Thank you! We'll get back to you soon.")
 
 
 @router.get("/dashboard/leads")
 async def list_leads(current_tenant: dict = Depends(get_current_tenant)):
-    """List all leads for the tenant (from the dashboard)."""
     tenant_id = current_tenant["tenant_id"]
-
-    cursor = db.leads.find(
-        {"tenant_id": tenant_id},
-        {"_id": 0},
-    ).sort("created_at", -1)
-
-    leads = await cursor.to_list(length=None)
+    leads = await lead_repo.get_by_tenant(tenant_id)
     return leads
