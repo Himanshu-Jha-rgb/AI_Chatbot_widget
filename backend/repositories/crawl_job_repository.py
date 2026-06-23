@@ -47,12 +47,27 @@ class CrawlJobRepository:
         return await self.collection.count_documents({"tenant_id": tenant_id})
 
     async def mark_stale_running_as_failed(self) -> int:
+        """Fail jobs that were interrupted and cannot be resumed by the monitor.
+           Jobs with a firecrawl_job_id are left alone — the crawl monitor will
+           pick them up and resume polling Firecrawl."""
         result = await self.collection.update_many(
-            {"status": "running"},
+            {
+                "status": {"$in": ["queued", "running"]},
+                "firecrawl_job_id": {"$exists": False},
+            },
             {"$set": {
                 "status": "failed",
                 "error": "Server restarted — crawl task was interrupted",
                 "finished_at": datetime.now(timezone.utc),
             }}
         )
-        return result.modified_count
+        # Also fail "processing" jobs (page data was lost on restart)
+        result2 = await self.collection.update_many(
+            {"status": "processing"},
+            {"$set": {
+                "status": "failed",
+                "error": "Server restarted — page processing was interrupted",
+                "finished_at": datetime.now(timezone.utc),
+            }}
+        )
+        return (result.modified_count or 0) + (result2.modified_count or 0)

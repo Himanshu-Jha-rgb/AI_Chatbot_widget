@@ -6,6 +6,7 @@ from core.config import settings
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from core.auth import db, limiter
+from services.crawler import start_crawl_monitor
 from fastapi.staticfiles import StaticFiles
 import os
 
@@ -92,6 +93,11 @@ async def cleanup_stale_jobs():
     modified = await repo.mark_stale_running_as_failed()
     if modified:
         print(f"Cleaned up {modified} stale crawl job(s)")
+    # Also fail matching source_jobs for the failed crawl jobs
+    await db.source_jobs.update_many(
+        {"status": {"$in": ["queued", "running", "processing"]}},
+        {"$set": {"status": "failed", "error": "Server restarted", "finished_at": datetime.now(timezone.utc)}}
+    )
 
 
 @app.on_event("startup")
@@ -131,3 +137,7 @@ async def ensure_lookup_indexes():
     await db.knowledge_gaps.create_index([("tenant_id", 1), ("cluster_id", 1)])
     await db.source_jobs.create_index([("tenant_id", 1), ("source_id", 1), ("started_at", -1)])
     await db.source_jobs.create_index([("tenant_id", 1), ("job_type", 1)])
+
+@app.on_event("startup")
+async def start_crawl_monitor_task():
+    asyncio.create_task(start_crawl_monitor())
