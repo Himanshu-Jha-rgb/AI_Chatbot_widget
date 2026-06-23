@@ -8,9 +8,8 @@ venv/
 
 # Environments
 .env
-.env.staging
-.env.production
-backend/.env*
+backend/.env.staging
+backend/.env.production
 
 # Node / Frontend
 node_modules/
