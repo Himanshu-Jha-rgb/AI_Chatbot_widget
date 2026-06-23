@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     COOKIE_SECURE: bool = False
     COOKIE_SAMESITE: str = "lax"
     ENFORCE_DOMAIN: bool = False
+    MAX_CRAWL_PAGES: int = 200
     REDIS_URI: str = "redis://localhost:6379/0"
 
     model_config = SettingsConfigDict(env_file=env_file_path, extra='ignore')

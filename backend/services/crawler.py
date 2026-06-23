@@ -8,8 +8,6 @@ from services.ingestion import ingest_document
 from services.suggested import generate_suggested_questions
 from core.config import settings
 
-MAX_PAGES = 200
-
 def normalize_url(url: str) -> str:
     url = url.strip().lower()
     if url.startswith("http://"):
@@ -73,7 +71,7 @@ async def _start_firecrawl_job(seed_url: str) -> str:
             headers=headers,
             json={
                 "url": seed_url,
-                "limit": MAX_PAGES,
+                "limit": settings.MAX_CRAWL_PAGES,
                 "scrapeOptions": {
                     "formats": ["markdown"],
                     "actions": [
