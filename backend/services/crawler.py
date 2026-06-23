@@ -67,7 +67,7 @@ async def crawl_task(tenant_id: str, seed_url: str, job_id: str, source_id: str 
 
 async def _start_firecrawl_job(seed_url: str) -> str:
     headers = {"Authorization": f"Bearer {settings.FIRECRAWL_API_KEY}"}
-    async with httpx.AsyncClient(timeout=httpx.Timeout(connect=60.0, read=120.0, write=60.0, pool=60.0)) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
         crawl_response = await client.post(
             "https://api.firecrawl.dev/v2/crawl",
             headers=headers,
@@ -119,7 +119,7 @@ async def _poll_and_process(job: dict):
     firecrawl_job_id = job["firecrawl_job_id"]
 
     headers = {"Authorization": f"Bearer {settings.FIRECRAWL_API_KEY}"}
-    async with httpx.AsyncClient(timeout=httpx.Timeout(connect=30.0, read=60.0)) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
         try:
             resp = await client.get(
                 f"https://api.firecrawl.dev/v2/crawl/{firecrawl_job_id}",
