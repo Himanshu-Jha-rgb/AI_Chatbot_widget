@@ -28,9 +28,21 @@ const Crawl = () => {
     try {
       const res = await privateAxios.get(`/dashboard/crawl/history?page=${p}&page_size=${pageSize}`);
       const data = res.data;
-      setHistory(Array.isArray(data.items) ? data.items : []);
+      const items = Array.isArray(data.items) ? data.items : [];
+      setHistory(items);
       setTotal(data.total || 0);
       setTotalPages(data.total_pages || 1);
+
+      // Auto-track any running job on page load (only first page)
+      if (p === 1 && !jobId) {
+        const activeJob = items.find((j: any) =>
+          j.status === 'running' || j.status === 'processing' || j.status === 'queued'
+        );
+        if (activeJob) {
+          setJobId(activeJob.job_id);
+          setJobStatus(activeJob);
+        }
+      }
     } catch (err) {
       console.error('Failed to fetch crawl history:', err);
     } finally {
@@ -64,12 +76,15 @@ const Crawl = () => {
     }
   };
 
-  const handleCancel = async () => {
-    if (!jobId || isCancelling) return;
+  const handleCancel = async (targetJobId?: string) => {
+    const id = targetJobId || jobId;
+    if (!id || isCancelling) return;
     setIsCancelling(true);
     try {
-      await privateAxios.delete(`/dashboard/crawl/${jobId}`);
-      setJobStatus((prev: any) => prev ? { ...prev, status: 'failed', error: 'Cancelled by user' } : prev);
+      await privateAxios.delete(`/dashboard/crawl/${id}`);
+      if (id === jobId) {
+        setJobStatus((prev: any) => prev ? { ...prev, status: 'failed', error: 'Cancelled by user' } : prev);
+      }
       setPage(1);
       fetchHistory(1);
     } catch (err: any) {
@@ -183,7 +198,7 @@ const Crawl = () => {
             <div className="flex items-center gap-2">
               {(jobStatus.status === 'running' || jobStatus.status === 'processing' || jobStatus.status === 'queued') && (
                 <button
-                  onClick={handleCancel}
+                  onClick={() => handleCancel()}
                   disabled={isCancelling}
                   className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xxs font-bold uppercase bg-rose-950/40 text-rose-400 border border-rose-900/30 hover:bg-rose-950/60 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-all"
                 >
@@ -250,6 +265,7 @@ const Crawl = () => {
                 <tr className="border-b border-slate-800 text-slate-400 text-xxs font-bold uppercase tracking-wider bg-slate-950/60">
                   <th className="px-6 py-3.5">Seed URL</th>
                   <th className="px-6 py-3.5">Status</th>
+                  <th className="px-6 py-3.5">Actions</th>
                   <th className="px-6 py-3.5">Pages</th>
                   <th className="px-6 py-3.5">Chunks</th>
                   <th className="px-6 py-3.5">Started</th>
@@ -271,6 +287,18 @@ const Crawl = () => {
                         }`}>
                         {job.status}
                       </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      {(job.status === 'running' || job.status === 'processing' || job.status === 'queued') && (
+                        <button
+                          onClick={() => handleCancel(job.job_id)}
+                          disabled={isCancelling}
+                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xxs font-bold uppercase bg-rose-950/40 text-rose-400 border border-rose-900/30 hover:bg-rose-950/60 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-all"
+                        >
+                          <XCircle size={12} />
+                          {isCancelling ? '...' : 'Cancel'}
+                        </button>
+                      )}
                     </td>
                     <td className="px-6 py-4 font-bold text-white">{job.pages_found}</td>
                     <td className="px-6 py-4 font-bold text-white">{job.chunks_created}</td>
