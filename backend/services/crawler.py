@@ -74,9 +74,6 @@ async def _start_firecrawl_job(seed_url: str) -> str:
                 "limit": settings.MAX_CRAWL_PAGES,
                 "scrapeOptions": {
                     "formats": ["markdown"],
-                    "actions": [
-                        {"type": "wait", "milliseconds": 10000},
-                    ],
                 }
             }
         )
