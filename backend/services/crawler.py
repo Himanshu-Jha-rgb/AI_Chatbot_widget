@@ -86,7 +86,7 @@ async def _start_firecrawl_job(seed_url: str) -> str | None:
         print(f"[FIRECRAWL] POST /v2/crawl status={crawl_response.status_code}")
         print(f"[FIRECRAWL] Response: {crawl_response.text[:500]}")
         if crawl_response.status_code == 402:
-            raise ValueError("Firecrawl credits exhausted — upgrade plan at firecrawl.dev/pricing")
+            raise ValueError("Crawl service limit reached. Please try again later or contact support.")
         crawl_response.raise_for_status()
         return crawl_response.json()["id"]
 
@@ -185,9 +185,9 @@ async def _poll_and_process(job: dict):
             return
 
         if status == "failed":
-            error_msg = data.get("error", "Firecrawl job failed")
+            error_msg = data.get("error", "Crawl job failed")
             print(f"[CRAWL_MONITOR] Job {job_id}: Firecrawl failed: {error_msg}")
-            await _fail_job(job_id, error_msg)
+            await _fail_job(job_id, "Crawl job failed. Please try again later.")
             return
 
 
