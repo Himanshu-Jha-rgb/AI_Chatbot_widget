@@ -3,7 +3,7 @@ import { privateAxios } from '../utils/axios';
 import { formatDate } from '../utils/date';
 import { useStore, hasAccess } from '../store';
 import { useRbacError } from '../hooks/useRbacError';
-import { RefreshCw, AlertCircle, History, Play, Lock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { RefreshCw, AlertCircle, History, Play, Lock, ChevronLeft, ChevronRight, XCircle } from 'lucide-react';
 
 const Crawl = () => {
   const { state } = useStore();
@@ -12,6 +12,7 @@ const Crawl = () => {
   const [jobStatus, setJobStatus] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [isStarting, setIsStarting] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [crawlError, setCrawlError] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -60,6 +61,21 @@ const Crawl = () => {
       setCrawlError(err.response?.data?.detail || 'Failed to start crawl job');
     } finally {
       setIsStarting(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!jobId || isCancelling) return;
+    setIsCancelling(true);
+    try {
+      await privateAxios.delete(`/dashboard/crawl/${jobId}`);
+      setJobStatus((prev: any) => prev ? { ...prev, status: 'failed', error: 'Cancelled by user' } : prev);
+      setPage(1);
+      fetchHistory(1);
+    } catch (err: any) {
+      setCrawlError(err.response?.data?.detail || 'Failed to cancel crawl job');
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -164,14 +180,26 @@ const Crawl = () => {
         <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800/80 shadow-lg space-y-4 animate-slideUp">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-white">Active Crawl Progress</h3>
-            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xxs font-bold uppercase ${jobStatus.status === 'done'
-                ? 'bg-teal-950/40 text-teal-400 border border-teal-900/30'
-                : jobStatus.status === 'failed'
-                  ? 'bg-rose-950/40 text-rose-400 border border-rose-900/30'
-                  : 'bg-amber-950/40 text-amber-400 border border-amber-900/30 animate-pulse'
-              }`}>
-              {jobStatus.status}
-            </span>
+            <div className="flex items-center gap-2">
+              {(jobStatus.status === 'running' || jobStatus.status === 'processing' || jobStatus.status === 'queued') && (
+                <button
+                  onClick={handleCancel}
+                  disabled={isCancelling}
+                  className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xxs font-bold uppercase bg-rose-950/40 text-rose-400 border border-rose-900/30 hover:bg-rose-950/60 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-all"
+                >
+                  <XCircle size={14} />
+                  {isCancelling ? 'Cancelling...' : 'Cancel'}
+                </button>
+              )}
+              <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xxs font-bold uppercase ${jobStatus.status === 'done'
+                  ? 'bg-teal-950/40 text-teal-400 border border-teal-900/30'
+                  : jobStatus.status === 'failed'
+                    ? 'bg-rose-950/40 text-rose-400 border border-rose-900/30'
+                    : 'bg-amber-950/40 text-amber-400 border border-amber-900/30 animate-pulse'
+                }`}>
+                {jobStatus.status}
+              </span>
+            </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4 text-xs">
