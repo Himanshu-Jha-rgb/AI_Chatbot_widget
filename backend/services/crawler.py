@@ -146,15 +146,27 @@ async def _poll_and_process(job: dict):
             return
 
         if status == "completed":
-            pages = data.get("data", [])
-            print(f"[CRAWL_MONITOR] Job {job_id}: Firecrawl completed with {len(pages)} pages")
+            all_pages = list(data.get("data", []))
+            next_url = data.get("next")
+            while next_url:
+                try:
+                    resp = await client.get(next_url, headers=headers)
+                    if resp.status_code != 200:
+                        break
+                    chunk = resp.json()
+                    all_pages.extend(chunk.get("data", []))
+                    next_url = chunk.get("next")
+                except Exception as e:
+                    print(f"[CRAWL_MONITOR] Job {job_id}: Pagination error: {e}")
+                    break
+            print(f"[CRAWL_MONITOR] Job {job_id}: Firecrawl completed with {len(all_pages)} pages")
             await db.crawl_jobs.update_one(
                 {"job_id": job_id},
-                {"$set": {"status": "processing", "pages_found": len(pages)}}
+                {"$set": {"status": "processing", "pages_found": len(all_pages)}}
             )
             asyncio.create_task(
                 _process_crawled_pages(
-                    tenant_id, job_id, pages,
+                    tenant_id, job_id, all_pages,
                     job.get("source_id", ""),
                     job.get("seed_url", "")
                 )
