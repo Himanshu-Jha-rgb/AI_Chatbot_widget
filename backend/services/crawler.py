@@ -72,6 +72,7 @@ async def _start_firecrawl_job(seed_url: str) -> str:
             json={
                 "url": seed_url,
                 "limit": settings.MAX_CRAWL_PAGES,
+                "maxConcurrency": 10,
                 "scrapeOptions": {
                     "formats": ["markdown"],
                 }
@@ -158,6 +159,11 @@ async def _poll_and_process(job: dict):
                     job.get("seed_url", "")
                 )
             )
+            return
+
+        if status is None or status == "unknown":
+            print(f"[CRAWL_MONITOR] Job {job_id}: Firecrawl job not found (stale), marking as failed")
+            await _fail_job(job_id, "Firecrawl job not found or expired")
             return
 
         if status == "failed":
